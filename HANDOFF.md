@@ -8,7 +8,7 @@ Stage 9. `C5 Consolidate in your own words`. A fresh session starts here.
 | --- | --- |
 | The game, live | https://sgilson7.github.io/galactic-survivors/ |
 | Repository | https://github.com/sgilson7/galactic-survivors |
-| Website listing | the tools section of https://sgilson7.github.io/ |
+| Website listing | https://sgilson7.github.io/projects/galactic-survivors/ and a tile under Games on /projects/ |
 | Design insights from the transcript | `notes/design-insights.html` (local only, not in git) and a private artifact |
 | Art gallery | a private artifact built from `web/art/` |
 
@@ -20,7 +20,9 @@ The MVP the brief describes: one twelve-minute run on one bounded map, three cha
 
 | Check | Result |
 | --- | --- |
-| `./scripts/check.sh` | see the last line of this table after the final run |
+| `./scripts/check.sh` | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 14 Oct 2026 |
+| `BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py` | PASSED in all three engines against the live site |
+| Website: `make check`, `make packet`, `make gate`, then `make gate-live` after publishing | all passed; the listing is at /projects/galactic-survivors/ |
 | `./scripts/count-tests.sh` | 115 passed, 0 failed, 1 ignored (the probe) |
 | `python3 scripts/break_tests.py` | 21 of 21 planted defects caught |
 | `python3 tests/browser/online.py chromium firefox webkit` | passed: two pages meet by pasted codes and play in step |

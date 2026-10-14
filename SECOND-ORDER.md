@@ -32,6 +32,9 @@ The code and tests are the work; this file is the record about the work: decisio
 | R1.24 | divergence | The design notes would live in the repository. | The transcript is a private conversation between two people, and the insights quote it. | `notes/` is in `.gitignore`; the brief says where the notes are. | `.gitignore` | done |
 | R1.25 | worklist | The balance makes a first run winnable but not easy. | The probe bot, with no upgrades, wins four of six runs. | The person decides after playing whether a first run should be harder, so the outfitter matters sooner. | — | person |
 | R1.26 | finding | The template's art check would pass with project pictures added. | Its driver test copies `tools/art` into a sandbox, picked up `art_galactic.py`, and found its PNGs missing. | The sandbox copy leaves out `art_*.py`; the real pictures are still checked by `art.py --check-only` on the project. | `tests/art_check.py` | done |
+| R1.27 | finding | XP shards were visible enough at 16 px. | In a gameplay still they read as specks and many went uncollected. | Drawn at 22 px, 28 px for large ones. | `render.rs` | done |
+| R1.28 | finding | The first commit would use a deliberate identity. | git has no identity on this machine, so the first commit carries the hostname-derived address, as Sam's other game repositories do; the website's notes say that is wrong for a public repository. | Later commits use `sgilson7@users.noreply.github.com` (local config). The first commit is left as it is. | `.git/config` | done |
+| R1.29 | divergence | The website deploy is Sam's alone (its rule 8). | The person wrote: "I approve deployment to the website in order to update the tools section." | The agent ran `make check`, `make packet`, `make gate`, `packaging/publish.sh` and `make gate-live` for this listing only. | DECISIONS.md | done |
 
 ## Strings written by the agent
 

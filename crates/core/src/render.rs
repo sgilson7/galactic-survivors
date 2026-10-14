@@ -118,7 +118,7 @@ pub fn frame(g: &Game) -> Vec<i32> {
             continue;
         }
         let (name, size) = match p.kind {
-            PickupKind::Xp => ("fx/xp_shard", if p.value > 4 { 22 } else { 16 }),
+            PickupKind::Xp => ("fx/xp_shard", if p.value > 4 { 28 } else { 22 }),
             PickupKind::Gold => ("fx/gold_chip", 20),
             PickupKind::Health => ("fx/health_cell", 24),
             PickupKind::Cache => ("fx/cache", 36),
