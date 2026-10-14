@@ -1,0 +1,73 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+\definecolor{acid}{HTML}{B8E04A}
+\definecolor{amber}{HTML}{FFB23E}
+\definecolor{badge}{HTML}{262238}
+\definecolor{badgehi}{HTML}{3A3454}
+\definecolor{coral}{HTML}{FF7B66}
+\definecolor{crystal}{HTML}{6E8FB0}
+\definecolor{faunateal}{HTML}{3B8C88}
+\definecolor{faunatealhi}{HTML}{5BB3A9}
+\definecolor{flesh}{HTML}{C98FA8}
+\definecolor{gold}{HTML}{FFC93C}
+\definecolor{goldhi}{HTML}{FFE9A0}
+\definecolor{ground}{HTML}{2D2939}
+\definecolor{groundB}{HTML}{322E40}
+\definecolor{groundC}{HTML}{29253A}
+\definecolor{gunmetal}{HTML}{565D6C}
+\definecolor{gunmetaldark}{HTML}{383D49}
+\definecolor{hazard}{HTML}{F2C230}
+\definecolor{haze}{HTML}{6B4473}
+\definecolor{heal}{HTML}{FF5C70}
+\definecolor{ink}{HTML}{14111C}
+\definecolor{moon}{HTML}{B9A8C9}
+\definecolor{offwhite}{HTML}{E3DFD0}
+\definecolor{olive}{HTML}{7D8740}
+\definecolor{olivehi}{HTML}{A2AD5A}
+\definecolor{pebble}{HTML}{3B3650}
+\definecolor{rift}{HTML}{7F45E8}
+\definecolor{rifthi}{HTML}{D3B1FF}
+\definecolor{rock}{HTML}{4B4562}
+\definecolor{rockdark}{HTML}{36314A}
+\definecolor{rockhi}{HTML}{5D5677}
+\definecolor{sensor}{HTML}{FF4A5C}
+\definecolor{shadow}{HTML}{1D1A28}
+\definecolor{shot}{HTML}{FF3DCF}
+\definecolor{shothi}{HTML}{FFC4F1}
+\definecolor{sky}{HTML}{2A2245}
+\definecolor{skyhi}{HTML}{1E1A33}
+\definecolor{skylow}{HTML}{4A3260}
+\definecolor{suit}{HTML}{F2F5F7}
+\definecolor{suitshade}{HTML}{BFCBD6}
+\definecolor{teal}{HTML}{33D1BF}
+\definecolor{ticket}{HTML}{B48CFF}
+\definecolor{violet}{HTML}{8462B8}
+\definecolor{violetdark}{HTML}{5B4284}
+\definecolor{violethi}{HTML}{A68AD6}
+\definecolor{visor}{HTML}{1D2B3E}
+\definecolor{visorhi}{HTML}{9DE6F4}
+\definecolor{weakspot}{HTML}{E8F25A}
+\definecolor{xp}{HTML}{4FEFFF}
+\definecolor{xphi}{HTML}{D2FBFF}
+\newlength{\Ink}\setlength{\Ink}{3pt}
+\tikzset{inked/.style={draw=ink,line width=\Ink,line join=round,line cap=round}}
+\begin{document}
+\begin{tikzpicture}
+\useasboundingbox (0,0) rectangle (4,4);
+\clip (0,0) rectangle (4,4);
+\filldraw[inked,fill=shadow] (2,0.486) ellipse (0.634 and 0.152);
+\draw[draw=ink,line width=9.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.437,1.824) (1.296,1.437) (1.507,1.12) (1.366,0.838)};
+\draw[draw=faunateal,line width=3.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.437,1.824) (1.296,1.437) (1.507,1.12) (1.366,0.838)};
+\draw[draw=ink,line width=9.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.824,1.824) (1.683,1.437) (1.894,1.12) (1.754,0.944)};
+\draw[draw=faunateal,line width=3.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.824,1.824) (1.683,1.437) (1.894,1.12) (1.754,0.944)};
+\draw[draw=ink,line width=9.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(2.211,1.824) (2.07,1.437) (2.282,1.12) (2.141,0.838)};
+\draw[draw=faunateal,line width=3.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(2.211,1.824) (2.07,1.437) (2.282,1.12) (2.141,0.838)};
+\draw[draw=ink,line width=9.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(2.563,1.824) (2.422,1.437) (2.634,1.12) (2.493,0.944)};
+\draw[draw=faunateal,line width=3.505pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(2.563,1.824) (2.422,1.437) (2.634,1.12) (2.493,0.944)};
+\filldraw[inked,fill=faunatealhi] plot[smooth cycle, tension=0.6] coordinates {(0.909,1.789) (1.12,2.528) (2,3.021) (2.88,2.528) (3.091,1.789) (2.528,1.648) (2,1.754) (1.472,1.648)};
+\filldraw[inked,fill=faunateal] plot[smooth cycle, tension=0.7] coordinates {(1.437,2.387) (2,2.739) (2.528,2.387) (2,2.211)};
+\filldraw[inked,fill=suit] [rotate around={40:(1.507,2.563)}] (1.507,2.563) ellipse (0.176 and 0.088);
+\filldraw[inked,fill=weakspot] (2.387,2.035) circle (0.229);
+\filldraw[inked,fill=ink] (2.422,2.035) ellipse (0.064 and 0.142);
+\end{tikzpicture}
+\end{document}

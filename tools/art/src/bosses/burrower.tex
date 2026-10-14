@@ -1,0 +1,93 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+\definecolor{acid}{HTML}{B8E04A}
+\definecolor{amber}{HTML}{FFB23E}
+\definecolor{badge}{HTML}{262238}
+\definecolor{badgehi}{HTML}{3A3454}
+\definecolor{coral}{HTML}{FF7B66}
+\definecolor{crystal}{HTML}{6E8FB0}
+\definecolor{faunateal}{HTML}{3B8C88}
+\definecolor{faunatealhi}{HTML}{5BB3A9}
+\definecolor{flesh}{HTML}{C98FA8}
+\definecolor{gold}{HTML}{FFC93C}
+\definecolor{goldhi}{HTML}{FFE9A0}
+\definecolor{ground}{HTML}{2D2939}
+\definecolor{groundB}{HTML}{322E40}
+\definecolor{groundC}{HTML}{29253A}
+\definecolor{gunmetal}{HTML}{565D6C}
+\definecolor{gunmetaldark}{HTML}{383D49}
+\definecolor{hazard}{HTML}{F2C230}
+\definecolor{haze}{HTML}{6B4473}
+\definecolor{heal}{HTML}{FF5C70}
+\definecolor{ink}{HTML}{14111C}
+\definecolor{moon}{HTML}{B9A8C9}
+\definecolor{offwhite}{HTML}{E3DFD0}
+\definecolor{olive}{HTML}{7D8740}
+\definecolor{olivehi}{HTML}{A2AD5A}
+\definecolor{pebble}{HTML}{3B3650}
+\definecolor{rift}{HTML}{7F45E8}
+\definecolor{rifthi}{HTML}{D3B1FF}
+\definecolor{rock}{HTML}{4B4562}
+\definecolor{rockdark}{HTML}{36314A}
+\definecolor{rockhi}{HTML}{5D5677}
+\definecolor{sensor}{HTML}{FF4A5C}
+\definecolor{shadow}{HTML}{1D1A28}
+\definecolor{shot}{HTML}{FF3DCF}
+\definecolor{shothi}{HTML}{FFC4F1}
+\definecolor{sky}{HTML}{2A2245}
+\definecolor{skyhi}{HTML}{1E1A33}
+\definecolor{skylow}{HTML}{4A3260}
+\definecolor{suit}{HTML}{F2F5F7}
+\definecolor{suitshade}{HTML}{BFCBD6}
+\definecolor{teal}{HTML}{33D1BF}
+\definecolor{ticket}{HTML}{B48CFF}
+\definecolor{violet}{HTML}{8462B8}
+\definecolor{violetdark}{HTML}{5B4284}
+\definecolor{violethi}{HTML}{A68AD6}
+\definecolor{visor}{HTML}{1D2B3E}
+\definecolor{visorhi}{HTML}{9DE6F4}
+\definecolor{weakspot}{HTML}{E8F25A}
+\definecolor{xp}{HTML}{4FEFFF}
+\definecolor{xphi}{HTML}{D2FBFF}
+\newlength{\Ink}\setlength{\Ink}{3.6pt}
+\tikzset{inked/.style={draw=ink,line width=\Ink,line join=round,line cap=round}}
+\begin{document}
+\begin{tikzpicture}
+\useasboundingbox (0,0) rectangle (8,8);
+\clip (0,0) rectangle (8,8);
+\filldraw[inked,fill=rockdark] plot[smooth cycle, tension=0.5] coordinates {(0.616,1.48) (1.48,2.2) (2.92,2.488) (5.08,2.416) (6.736,2.2) (7.456,1.408) (5.8,0.76) (2.2,0.76)};
+\filldraw[inked,fill=shadow] plot[smooth cycle, tension=0.6] coordinates {(1.84,1.624) (2.92,2.128) (5.08,2.128) (6.16,1.624) (4.72,1.264) (2.92,1.264)};
+\filldraw[inked,fill=violet] (3.64,1.984) ellipse (1.656 and 1.027);
+\filldraw[inked,fill=violethi] (3.424,2.272) ellipse (0.994 and 0.364);
+\filldraw[inked,fill=violet] (3.424,2.92) ellipse (1.656 and 1.027);
+\filldraw[inked,fill=violethi] (3.208,3.208) ellipse (0.994 and 0.364);
+\filldraw[inked,fill=violet] (3.568,3.856) ellipse (1.656 and 1.027);
+\filldraw[inked,fill=violethi] (3.352,4.144) ellipse (0.994 and 0.364);
+\filldraw[inked,fill=violet] (4,4.72) ellipse (1.656 and 1.027);
+\filldraw[inked,fill=violethi] (3.784,5.008) ellipse (0.994 and 0.364);
+\filldraw[inked,fill=violetdark] plot[smooth cycle, tension=0.55] coordinates {(2.488,4.936) (2.704,6.52) (4.36,7.24) (6.16,6.808) (7.096,5.584) (6.52,4.288) (4.72,4.072)};
+\filldraw[inked,fill=faunateal] plot[smooth cycle, tension=0.6] coordinates {(2.92,5.656) (3.424,6.736) (4.576,7.024) (4.36,6.088)};
+\filldraw[inked,fill=ink] (6.088,5.44) ellipse (0.936 and 1.08);
+\filldraw[inked,fill=flesh] (6.16,5.44) ellipse (0.648 and 0.756);
+\filldraw[inked,fill=suit] (7.024,5.656) -- (7.024,5.224) -- (6.52,5.44) -- cycle;
+\filldraw[inked,fill=suit] (6.597,6.356) -- (6.903,6.051) -- (6.393,5.796) -- cycle;
+\filldraw[inked,fill=suit] (5.872,6.52) -- (6.304,6.52) -- (6.088,5.944) -- cycle;
+\filldraw[inked,fill=suit] (5.273,6.051) -- (5.579,6.356) -- (5.783,5.796) -- cycle;
+\filldraw[inked,fill=suit] (5.152,5.224) -- (5.152,5.656) -- (5.656,5.44) -- cycle;
+\filldraw[inked,fill=suit] (5.579,4.524) -- (5.273,4.829) -- (5.783,5.084) -- cycle;
+\filldraw[inked,fill=suit] (6.304,4.36) -- (5.872,4.36) -- (6.088,4.936) -- cycle;
+\filldraw[inked,fill=suit] (6.903,4.829) -- (6.597,4.524) -- (6.393,5.084) -- cycle;
+\filldraw[inked,fill=weakspot] (6.16,5.44) circle (0.216);
+\filldraw[inked,fill=weakspot] (4.72,6.088) circle (0.252);
+\filldraw[inked,fill=ink] (4.758,6.088) ellipse (0.071 and 0.156);
+\filldraw[inked,fill=weakspot] (5.224,6.592) circle (0.18);
+\filldraw[inked,fill=ink] (5.251,6.592) ellipse (0.05 and 0.112);
+\filldraw[inked,fill=weakspot] (4.432,5.44) circle (0.18);
+\filldraw[inked,fill=ink] (4.459,5.44) ellipse (0.05 and 0.112);
+\filldraw[inked,fill=rock] plot[smooth cycle, tension=0.3] coordinates {(0.616,1.552) (0.846,2.243) (1.595,2.186) (1.768,1.61)};
+\filldraw[inked,fill=rock] plot[smooth cycle, tension=0.3] coordinates {(1.84,0.796) (1.984,1.228) (2.452,1.192) (2.56,0.832)};
+\filldraw[inked,fill=rock] plot[smooth cycle, tension=0.3] coordinates {(5.656,0.868) (5.858,1.473) (6.513,1.422) (6.664,0.918)};
+\filldraw[inked,fill=rock] plot[smooth cycle, tension=0.3] coordinates {(6.52,1.948) (6.664,2.38) (7.132,2.344) (7.24,1.984)};
+\filldraw[inked,fill=rock] plot[smooth cycle, tension=0.3] coordinates {(4.468,0.778) (4.569,1.08) (4.896,1.055) (4.972,0.803)};
+\end{tikzpicture}
+\end{document}

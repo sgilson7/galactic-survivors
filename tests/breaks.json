@@ -1,0 +1,149 @@
+[
+  {
+    "name": "an enemy crowd lands many hits",
+    "file": "crates/core/src/world.rs",
+    "find": "if !p.alive || p.invulnerable > 0 {",
+    "replace": "if !p.alive {",
+    "test": "a_crowd_touching_the_player_in_one_tick_deals_one_hit"
+  },
+  {
+    "name": "targeting prefers the farthest",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "            .min()\n            .map(|(_, _, i)| i)\n    }\n\n    /// Among the eight nearest",
+    "replace": "            .max()\n            .map(|(_, _, i)| i)\n    }\n\n    /// Among the eight nearest",
+    "test": "default_targeting_picks_the_nearest_enemy_not_the_boss"
+  },
+  {
+    "name": "auto-aim is ignored",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "if !p.load.autoaim && p.aiming {",
+    "replace": "if p.aiming {",
+    "test": "pointer_abilities_follow_the_pointer_unless_auto_aim_is_on"
+  },
+  {
+    "name": "an evolution needs no partner",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "&& p.passives.iter().any(|q| q.id == def.evolves_with)",
+    "replace": "",
+    "test": "an_evolution_is_offered_once_possible_and_needs_its_partner"
+  },
+  {
+    "name": "a locked evolution is allowed",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "&& !p.load.locked.contains(&def.evolution)",
+    "replace": "",
+    "test": "a_locked_evolution_is_not_offered"
+  },
+  {
+    "name": "the level-up hand leaves out the evolution",
+    "file": "crates/core/src/offer.rs",
+    "find": "            keep.push(Card {\n                kind: CardKind::Evolve,",
+    "replace": "            let _ = (Card {\n                kind: CardKind::Evolve,",
+    "test": "an_evolution_is_offered_once_possible_and_needs_its_partner"
+  },
+  {
+    "name": "another character's ability is offered",
+    "file": "crates/core/src/offer.rs",
+    "find": "if !owned && allowed && !p.banished.contains(&a.id) {",
+    "replace": "if !owned && !p.banished.contains(&a.id) {",
+    "test": "offers_hold_only_what_the_character_may_take_and_never_regeneration"
+  },
+  {
+    "name": "a banished ability comes back",
+    "file": "crates/core/src/offer.rs",
+    "find": "if !owned && allowed && !p.banished.contains(&a.id) {",
+    "replace": "if !owned && allowed {",
+    "test": "a_banished_card_is_never_offered_again"
+  },
+  {
+    "name": "no pity for a rare",
+    "file": "crates/core/src/meta.rs",
+    "find": "if rolled == Rarity::Common && self.pity_rare + 1 >= c.pity_rare {",
+    "replace": "if false {",
+    "test": "ten_pulls_hold_a_rare_or_better"
+  },
+  {
+    "name": "an achievement pays twice",
+    "file": "crates/core/src/meta.rs",
+    "find": "if self.claimed.contains(&a.id) || self.stat(&a.stat) < a.target {",
+    "replace": "if self.stat(&a.stat) < a.target {",
+    "test": "achievements_are_listed_before_they_are_earned_and_pay_once"
+  },
+  {
+    "name": "achievements give no XP",
+    "file": "crates/core/src/meta.rs",
+    "find": "stats.xp_pct += content.achievement_xp_pct * self.claimed.len() as i32;",
+    "replace": "",
+    "test": "each_claimed_achievement_adds_one_percent_xp"
+  },
+  {
+    "name": "the raid can come early",
+    "file": "crates/core/src/world.rs",
+    "find": "let raid_at = ticks(1000) * rng.between(raid.from_s, raid.to_s.max(raid.from_s));",
+    "replace": "let raid_at = ticks(1000) * rng.between(0, raid.to_s.max(raid.from_s));",
+    "test": "the_raid_arrives_inside_its_window"
+  },
+  {
+    "name": "breaker takes full contact damage",
+    "file": "crates/core/src/world.rs",
+    "find": "            let taken_pct = if ch.contact_taken_pct > 0 {",
+    "replace": "            let taken_pct = if false {",
+    "test": "breaker_takes_half_contact_damage_and_hurts_what_touches_it"
+  },
+  {
+    "name": "a ghost is never revived",
+    "file": "crates/core/src/world.rs",
+    "find": "if p.revive_progress >= ticks(content.run.revive_ms) {",
+    "replace": "if false {",
+    "test": "a_downed_player_drops_cells_and_is_revived_by_standing_beside_the_ghost"
+  },
+  {
+    "name": "bosses are immune",
+    "file": "crates/core/src/world.rs",
+    "find": "        f.hp -= damage;",
+    "replace": "        f.hp -= if e.boss { 0 } else { damage };",
+    "test": "every_starter_damages_every_boss"
+  },
+  {
+    "name": "another build is let in",
+    "file": "crates/core/src/online.rs",
+    "find": "if protocol != PROTOCOL || build != self.build {",
+    "replace": "if protocol != PROTOCOL {",
+    "test": "another_build_or_protocol_is_turned_away_with_a_reason"
+  },
+  {
+    "name": "a tick runs on a guess",
+    "file": "crates/core/src/online.rs",
+    "find": "let b = *self.inputs[1].get(&t)?;",
+    "replace": "let b = self.inputs[1].get(&t).copied().unwrap_or(0);",
+    "test": "a_copy_waits_for_the_other_seat_and_does_not_guess"
+  },
+  {
+    "name": "co-op runs ahead of the clock",
+    "file": "crates/core/src/game.rs",
+    "find": "self.coop_due = (self.coop_due + budget as i32)",
+    "replace": "self.coop_due = (self.coop_due + 3 * budget as i32)",
+    "test": "two_games_play_one_co_op_run_and_hold_the_same_world"
+  },
+  {
+    "name": "a save from another game is read",
+    "file": "crates/core/src/meta.rs",
+    "find": "if value.get(\"format\").and_then(|f| f.as_str()) != Some(SAVE_FORMAT) {",
+    "replace": "if false {",
+    "test": "a_save_from_another_game_is_refused_with_a_reason"
+  },
+  {
+    "name": "the shop may sell xp",
+    "file": "crates/core/src/content.rs",
+    "find": "let stat_ok = |s: &str| STATS.contains(&s) && !FORBIDDEN_STATS.contains(&s);",
+    "replace": "let stat_ok = |s: &str| STATS.contains(&s) || FORBIDDEN_STATS.contains(&s);",
+    "test": "a_shop_item_that_raises_xp_or_gold_is_refused"
+  },
+  {
+    "name": "an unknown action is accepted",
+    "file": "crates/core/src/game.rs",
+    "find": "other => return Err(format!(\"Unknown action \\\"{other}\\\".\")),",
+    "replace": "_ => {}",
+    "test": "an_unknown_action_is_an_error"
+  }
+]

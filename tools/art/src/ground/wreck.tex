@@ -1,0 +1,73 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+\definecolor{acid}{HTML}{B8E04A}
+\definecolor{amber}{HTML}{FFB23E}
+\definecolor{badge}{HTML}{262238}
+\definecolor{badgehi}{HTML}{3A3454}
+\definecolor{coral}{HTML}{FF7B66}
+\definecolor{crystal}{HTML}{6E8FB0}
+\definecolor{faunateal}{HTML}{3B8C88}
+\definecolor{faunatealhi}{HTML}{5BB3A9}
+\definecolor{flesh}{HTML}{C98FA8}
+\definecolor{gold}{HTML}{FFC93C}
+\definecolor{goldhi}{HTML}{FFE9A0}
+\definecolor{ground}{HTML}{2D2939}
+\definecolor{groundB}{HTML}{322E40}
+\definecolor{groundC}{HTML}{29253A}
+\definecolor{gunmetal}{HTML}{565D6C}
+\definecolor{gunmetaldark}{HTML}{383D49}
+\definecolor{hazard}{HTML}{F2C230}
+\definecolor{haze}{HTML}{6B4473}
+\definecolor{heal}{HTML}{FF5C70}
+\definecolor{ink}{HTML}{14111C}
+\definecolor{moon}{HTML}{B9A8C9}
+\definecolor{offwhite}{HTML}{E3DFD0}
+\definecolor{olive}{HTML}{7D8740}
+\definecolor{olivehi}{HTML}{A2AD5A}
+\definecolor{pebble}{HTML}{3B3650}
+\definecolor{rift}{HTML}{7F45E8}
+\definecolor{rifthi}{HTML}{D3B1FF}
+\definecolor{rock}{HTML}{4B4562}
+\definecolor{rockdark}{HTML}{36314A}
+\definecolor{rockhi}{HTML}{5D5677}
+\definecolor{sensor}{HTML}{FF4A5C}
+\definecolor{shadow}{HTML}{1D1A28}
+\definecolor{shot}{HTML}{FF3DCF}
+\definecolor{shothi}{HTML}{FFC4F1}
+\definecolor{sky}{HTML}{2A2245}
+\definecolor{skyhi}{HTML}{1E1A33}
+\definecolor{skylow}{HTML}{4A3260}
+\definecolor{suit}{HTML}{F2F5F7}
+\definecolor{suitshade}{HTML}{BFCBD6}
+\definecolor{teal}{HTML}{33D1BF}
+\definecolor{ticket}{HTML}{B48CFF}
+\definecolor{violet}{HTML}{8462B8}
+\definecolor{violetdark}{HTML}{5B4284}
+\definecolor{violethi}{HTML}{A68AD6}
+\definecolor{visor}{HTML}{1D2B3E}
+\definecolor{visorhi}{HTML}{9DE6F4}
+\definecolor{weakspot}{HTML}{E8F25A}
+\definecolor{xp}{HTML}{4FEFFF}
+\definecolor{xphi}{HTML}{D2FBFF}
+\newlength{\Ink}\setlength{\Ink}{3pt}
+\tikzset{inked/.style={draw=ink,line width=\Ink,line join=round,line cap=round}}
+\begin{document}
+\begin{tikzpicture}
+\useasboundingbox (0,0) rectangle (4,4);
+\clip (0,0) rectangle (4,4);
+\filldraw[inked,fill=shadow] (2,0.733) ellipse (1.584 and 0.38);
+\filldraw[inked,fill=suitshade] plot[smooth cycle, tension=0.4] coordinates {(0.361,1.507) (0.727,2.54) (1.53,2.848) (2.896,2.508) (3.391,2.021) (3.179,0.732)};
+\filldraw[inked,fill=amber,rounded corners=0.053cm] (0.762,1.951) -- (3.016,1.389) -- (3.084,1.662) -- (0.83,2.225) -- cycle;
+\filldraw[inked,fill=gunmetaldark] (2.29,2.26) circle (0.229);
+\filldraw[inked,fill=visor] (2.29,2.26) circle (0.123);
+\filldraw[inked,fill=gunmetaldark] (1.47,2.464) circle (0.176);
+\filldraw[inked,fill=gunmetal] (3.306,2.115) -- (3.759,1.748) -- (3.417,1.543) -- (3.58,1.176) -- (3.196,0.8) -- (3.034,0.877) -- cycle;
+\filldraw[inked,fill=rockdark] (0.416,0.909) -- (3.584,0.909) -- (3.302,0.698) -- (0.698,0.662) -- cycle;
+\draw[draw=ink,line width=9.505pt,line cap=round,line join=round] (0.944,1.648) -- (0.486,2.634);
+\draw[draw=gunmetal,line width=3.505pt,line cap=round,line join=round] (0.944,1.648) -- (0.486,2.634);
+\filldraw[inked,fill=gunmetaldark,rounded corners=0.053cm] (0.31,2.563) -- (0.698,2.563) -- (0.698,2.739) -- (0.31,2.739) -- cycle;
+\filldraw[inked,fill=gunmetal,rounded corners=0.035cm] (2.915,0.648) -- (3.197,0.648) -- (3.197,0.817) -- (2.915,0.817) -- cycle;
+\filldraw[inked,fill=gunmetal,rounded corners=0.035cm] (1.19,0.564) -- (1.402,0.564) -- (1.402,0.691) -- (1.19,0.691) -- cycle;
+\filldraw[inked,fill=gunmetal,rounded corners=0.035cm] (2.264,0.504) -- (2.44,0.504) -- (2.44,0.61) -- (2.264,0.61) -- cycle;
+\end{tikzpicture}
+\end{document}

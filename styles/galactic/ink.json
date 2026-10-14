@@ -1,0 +1,11 @@
+{
+  "_about": "Ink width in pt for each picture kind in data/art.json sizes. Small pictures get a bolder line so the outline survives being shown at 32-64 px in play.",
+  "default": 1.6,
+  "scene": 1.4,
+  "unit": 1.5,
+  "sprite": 3.0,
+  "boss": 3.6,
+  "small": 1.6,
+  "icon": 2.2,
+  "tile": 1.0
+}

@@ -1,0 +1,19 @@
+/* Page tokens for the Galactic Survivors style pack. A page that wants its
+   chrome to sit with the art may import this file and use the tokens. */
+:root {
+  --art-ink: #14111C;
+  --art-ground: #2D2939;
+  --art-ground-b: #322E40;
+  --art-rock: #4B4562;
+  --art-sky: #2A2245;
+  --art-suit: #F2F5F7;
+  --art-amber: #FFB23E;
+  --art-teal: #33D1BF;
+  --art-coral: #FF7B66;
+  --art-violet: #8462B8;
+  --art-hazard: #F2C230;
+  --art-shot: #FF3DCF;
+  --art-xp: #4FEFFF;
+  --art-gold: #FFC93C;
+  --art-ink-width: 2px;
+}
