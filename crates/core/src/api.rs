@@ -139,7 +139,8 @@ impl Api {
         }
     }
 
-    /// Everything to send, as a JSON list of [peer, text].
+    /// Everything to send, as a JSON list of [peer, text, fast]: fast
+    /// messages may take the channel that drops and reorders.
     pub fn net_outbox(&mut self) -> String {
         let out = self.game.as_mut().map(|g| g.net_outbox()).unwrap_or_default();
         serde_json::to_string(&out).expect("outbox serialises")

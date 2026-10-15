@@ -28,6 +28,12 @@ pub const BITS: &[(&str, u32)] = &[
     ("inspect", 1024),
 ];
 
+/// Frames the partner glides for after a correction.
+pub const EASE_FRAMES: u32 = 10;
+
+/// Beyond this, the partner's drawn place jumps instead of gliding.
+pub const PARTNER_SNAP_PX: i32 = 160;
+
 /// Screen pixels a touch must drag before it steers.
 pub const STICK_DEAD_ZONE: i64 = 12;
 
@@ -120,6 +126,16 @@ pub struct Game {
     held: u32,
     last_bits: u32,
     pending_card: u8,
+    /// A move made in the rig window, waiting for the next tick.
+    pending_rig: u16,
+    /// The page's clock at the last frame, for timing pings.
+    now_us: i64,
+    /// Where the partner is drawn in co-op: it eases toward where the world
+    /// has them, so a correction is a glide, not a jump (T13).
+    pub partner_drawn: Option<crate::geom::V>,
+    /// Frames left to ease after the last correction; otherwise the
+    /// partner is drawn where they are.
+    ease_frames: u32,
     pub paused: bool,
     /// The build overlay in a co-op run, which does not pause (T1).
     pub inspect: bool,
@@ -130,7 +146,6 @@ pub struct Game {
     pub gear_pick: u32,
     /// The achievement chosen on the grid.
     pub ach_pick: String,
-    coop_due: i32,
     pub payout: Option<Payout>,
     pub pulls: Vec<Pull>,
     pub reveal_all: bool,
@@ -164,13 +179,16 @@ impl Game {
             held: 0,
             last_bits: 0,
             pending_card: 0,
+            pending_rig: 0,
+            now_us: 0,
+            partner_drawn: None,
+            ease_frames: 0,
             paused: false,
             inspect: false,
             codex_open: false,
             codex_tab: "abilities".into(),
             gear_pick: 0,
             ach_pick: String::new(),
-            coop_due: 0,
             payout: None,
             pulls: Vec::new(),
             reveal_all: false,
@@ -235,6 +253,7 @@ impl Game {
             ay: aim.y as i8,
             flags,
             card,
+            rig: 0,
         }
     }
 
@@ -255,6 +274,7 @@ impl Game {
     /// One display frame: run the ticks the time allows.
     pub fn advance(&mut self, now_us: i64, raw: Raw) {
         self.frame = self.frame.wrapping_add(1);
+        self.now_us = now_us;
         let pressed = raw.bits & !self.last_bits;
         self.last_bits = raw.bits;
         self.held = raw.bits;
@@ -275,11 +295,15 @@ impl Game {
             self.pending_card = Game::card_from_bits(pressed);
         }
         if self.coop_running() {
-            self.advance_coop(&raw, tick_bits.len());
+            self.advance_coop(&raw, &tick_bits);
         } else if !self.paused {
             for b in tick_bits {
                 let card = std::mem::take(&mut self.pending_card);
-                let input = self.local_input(&raw, b, card);
+                let rig = std::mem::take(&mut self.pending_rig);
+                let input = Input {
+                    rig,
+                    ..self.local_input(&raw, b, card)
+                };
                 let content = &self.content;
                 if let Some(w) = self.world.as_mut() {
                     w.step(content, &[input]);
@@ -289,34 +313,63 @@ impl Game {
         self.after_tick();
     }
 
-    fn advance_coop(&mut self, raw: &Raw, budget: usize) {
-        let card = std::mem::take(&mut self.pending_card);
-        let input = self.local_input(raw, self.held, card);
-        let Some(link) = self.session.as_mut() else { return };
-        link.local(input.pack());
-        // the clock says how many ticks are due; ticks that could not run
-        // for want of the partner's input stay due, a few at most, so a
-        // late copy catches up and no copy runs ahead of real time
-        self.coop_due = (self.coop_due + budget as i32).min(crate::ticks::MAX_TICKS_PER_FRAME as i32);
-        while self.coop_due > 0 {
-            let Some(link) = self.session.as_mut() else { return };
-            let Some(keys) = link.ready() else { break };
-            let inputs = [Input::unpack(keys[0]), Input::unpack(keys[1])];
-            let content = &self.content;
-            let Some(w) = self.world.as_mut() else { return };
-            w.step(content, &inputs);
-            let sum = w.sum();
-            if let Some(link) = self.session.as_mut() {
-                link.ran(sum);
-            }
-            self.coop_due -= 1;
+    /// One display frame of a co-op run (T13): this browser's input for the
+    /// ticks ahead, the ticks the clock allows (after any rollback), and
+    /// what to send.
+    fn advance_coop(&mut self, raw: &Raw, tick_bits: &[u32]) {
+        let bits = if tick_bits.is_empty() {
+            raw.bits
+        } else {
+            tick_bits.iter().fold(0, |a, b| a | b)
+        };
+        let held = self.local_input(raw, bits, 0).pack() & online::HELD_MASK;
+        let once = Input {
+            card: std::mem::take(&mut self.pending_card),
+            rig: std::mem::take(&mut self.pending_rig),
+            ..Input::default()
         }
-        if card != 0 {
-            // a card action rides on the next input only once
-            if let Some(link) = self.session.as_mut() {
-                link.local(Input { card: 0, ..input }.pack());
-            }
+        .pack();
+        let mut due = tick_bits.len() as u32;
+        let (Some(link), Some(w)) = (self.session.as_mut(), self.world.as_mut()) else {
+            return;
+        };
+        // keep pace: a browser far ahead of its partner gives up a tick now
+        // and then, so neither is always running on guesses
+        if link.ahead() > online::DELAY as i32 + 3 && self.frame.is_multiple_of(4) && due > 0 {
+            due -= 1;
         }
+        link.local(held, once);
+        let corrections = link.stats.rollbacks;
+        let content = &self.content;
+        link.advance(
+            w,
+            due,
+            &mut |w: &mut World, keys| w.step(content, &[Input::unpack(keys[0]), Input::unpack(keys[1])]),
+            &|w: &World| w.sum(),
+        );
+        link.send_inputs();
+        link.maybe_ping(self.now_us);
+        if link.stats.rollbacks != corrections {
+            self.ease_frames = EASE_FRAMES;
+        }
+        self.ease_partner();
+    }
+
+    /// For a few frames after a correction, moves the partner's drawn
+    /// place a third of the way to the true one each frame; a long way (a
+    /// rift, a revive) is a jump.
+    fn ease_partner(&mut self) {
+        self.ease_frames = self.ease_frames.saturating_sub(1);
+        let Some(w) = self.world.as_ref() else { return };
+        let Some(p) = w.players.get(1 - self.seat.min(1)) else {
+            return;
+        };
+        let to = p.pos;
+        let far = crate::geom::px(PARTNER_SNAP_PX) as i64;
+        self.partner_drawn = Some(match self.partner_drawn {
+            Some(at) if self.ease_frames > 0 && to.sub(at).len() <= far => at.add(to.sub(at).scale(1, 3)),
+            _ => to,
+        });
     }
 
     fn after_tick(&mut self) {
@@ -325,10 +378,20 @@ impl Game {
             .as_ref()
             .map(|n| matches!(n.status, online::LEFT_ROOM | online::DESYNC) && self.world.is_some())
             .unwrap_or(false);
+        // in co-op the run is over once every input up to its end is
+        // known: a guess may end a run that the true inputs do not
         let over = self
             .world
             .as_ref()
-            .map(|w| w.phase != Phase::Playing)
+            .map(|w| {
+                w.phase != Phase::Playing
+                    && self
+                        .session
+                        .as_ref()
+                        .filter(|n| n.running)
+                        .map(|n| n.confirmed() >= w.tick)
+                        .unwrap_or(true)
+            })
             .unwrap_or(false);
         if over || lost_partner {
             if lost_partner {
@@ -367,6 +430,8 @@ impl Game {
         self.inspect = false;
         self.codex_open = false;
         if let Some(link) = self.session.as_mut() {
+            // the last inputs go reliably, so the partner can confirm the end
+            link.send_inputs_reliably();
             link.running = false;
         }
     }
@@ -393,6 +458,8 @@ impl Game {
         self.inspect = false;
         self.codex_open = false;
         self.pending_card = 0;
+        self.pending_rig = 0;
+        self.partner_drawn = None;
         self.payout = None;
     }
 
@@ -451,7 +518,7 @@ impl Game {
             .map(|n| n.status == online::LOBBY)
             .unwrap_or(false);
         let Some(n) = self.session.as_mut() else { return };
-        n.message(peer, text);
+        n.message(peer, text, self.now_us);
         let now_lobby = n.status == online::LOBBY;
         if now_lobby && !was_lobby && n.seat == 1 {
             let load = self.my_load();
@@ -473,7 +540,7 @@ impl Game {
         }
     }
 
-    pub fn net_outbox(&mut self) -> Vec<(u32, String)> {
+    pub fn net_outbox(&mut self) -> Vec<(u32, String, bool)> {
         self.session.as_mut().map(|n| n.take_outbox()).unwrap_or_default()
     }
 
@@ -687,6 +754,7 @@ impl Game {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use std::collections::VecDeque;
 
     pub fn game() -> Game {
         Game::new(
@@ -700,10 +768,10 @@ pub mod tests {
 
     /// Passes everything each game left in its outbox to the other.
     fn wire(a: &mut Game, b: &mut Game) {
-        for (_, text) in a.net_outbox() {
+        for (_, text, _) in a.net_outbox() {
             b.net_message(1, &text);
         }
-        for (_, text) in b.net_outbox() {
+        for (_, text, _) in b.net_outbox() {
             a.net_message(2, &text);
         }
     }
@@ -769,6 +837,89 @@ pub mod tests {
             let status = g.session.as_ref().unwrap().status;
             assert!(status == online::PLAYING, "{status}");
         }
+    }
+
+    /// Two co-op games whose messages take `lag` frames, losing every
+    /// `lose`-th fast message, for `frames` frames.
+    fn lagged_coop(lag: usize, lose: usize, frames: i64, host_bits: fn(i64) -> u32) -> (Game, Game) {
+        let mut host = game();
+        let mut join = game();
+        host.host(7, "gs");
+        join.join("ABCDE", "gs").unwrap();
+        host.net_peer(2);
+        join.net_peer(1);
+        wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        let mut to_join: VecDeque<Vec<(u32, String, bool)>> = VecDeque::new();
+        let mut to_host: VecDeque<Vec<(u32, String, bool)>> = VecDeque::new();
+        let mut n = [0usize; 2];
+        for f in 0..frames {
+            let raw = Raw {
+                bits: host_bits(f),
+                ..Raw::default()
+            };
+            host.advance(f * 16_667, raw);
+            join.advance(f * 16_667 + 3_000, Raw { bits: if (f / 25) % 2 == 0 { 4 } else { 1 }, ..Raw::default() });
+            for g in [&mut host, &mut join] {
+                if g.world.as_ref().map(|w| w.players[g.seat].offer.is_some()).unwrap_or(false) {
+                    g.act("card.take", "1").unwrap();
+                }
+            }
+            let mut drop = |k: usize, out: Vec<(u32, String, bool)>| -> Vec<(u32, String, bool)> {
+                out.into_iter()
+                    .filter(|(_, _, fast)| {
+                        if !*fast {
+                            return true;
+                        }
+                        n[k] += 1;
+                        lose == 0 || !n[k].is_multiple_of(lose)
+                    })
+                    .collect()
+            };
+            to_join.push_back(drop(0, host.net_outbox()));
+            to_host.push_back(drop(1, join.net_outbox()));
+            if to_join.len() > lag {
+                for (_, t, _) in to_join.pop_front().unwrap() {
+                    join.net_message(1, &t);
+                }
+                for (_, t, _) in to_host.pop_front().unwrap() {
+                    host.net_message(2, &t);
+                }
+            }
+        }
+        (host, join)
+    }
+
+    #[test]
+    fn a_laggy_lossy_co_op_run_stays_in_step_and_keeps_moving() {
+        // 6 frames each way is a 200 ms round trip; one fast message in four lost
+        let (host, join) = lagged_coop(6, 4, 1500, |f| if (f / 40) % 2 == 0 { 8 } else { 2 });
+        for g in [&host, &join] {
+            let n = g.session.as_ref().unwrap();
+            assert_eq!(n.status, online::PLAYING, "the checksums agree");
+            assert!(n.stats.rollbacks > 0, "a 200 ms trip needs corrections");
+            // the lockstep this replaced stood still for every late input;
+            // rollback waits only past MAX_AHEAD
+            assert!(n.stats.stalls < 300, "waited {} frames of 1500", n.stats.stalls);
+            assert!(n.stats.rtt_us >= 180_000, "ping measured: {}", n.stats.rtt_us);
+        }
+        let t = host.world.as_ref().unwrap().tick;
+        assert!(t > 1100, "the run kept moving: tick {t} after 1500 frames");
+    }
+
+    #[test]
+    fn in_co_op_your_own_move_shows_within_three_ticks() {
+        // standing still for two seconds, then left, over a 200 ms round trip
+        let still = lagged_coop(6, 0, 120, |_| 0).0;
+        let (host, _join) = lagged_coop(6, 0, 124, |f| if f < 120 { 0 } else { 4 });
+        let (a, b) = (still.world.as_ref().unwrap(), host.world.as_ref().unwrap());
+        assert!(
+            b.players[0].pos.x < a.players[0].pos.x,
+            "own input showed within four frames (DELAY {})",
+            online::DELAY
+        );
     }
 
     #[test]

@@ -1,4 +1,5 @@
-// The transport: browsers, one reliable channel each, and no server of ours.
+// The transport: browsers, a reliable channel and a fast one each, and no
+// server of ours.
 //
 // Vagrancy's web/rtc.js, which was ported from Floodline's web/quad_rtc.js
 // (its `window.FLOODLINE_RTC` API, :683-710) with the miniquad plugin glue
@@ -29,6 +30,11 @@
 import { CONFIG, iceServers } from "./config.js";
 
 const CHANNEL_ID = CONFIG.channelId;
+// Galactic Survivors (T13): a second negotiated channel, unordered and never
+// resent, for messages the core marks fast (its inputs and pings). On the
+// reliable channel one lost packet held every later one until it was sent
+// again, and both screens froze for that long.
+const FAST_ID = CONFIG.fastChannelId;
 // Every message carries one byte saying what it is. A role says who the
 // sender is; an ack says the sender has heard the other's role; data is the
 // game's.
@@ -93,10 +99,18 @@ export function open({ isHost, mode, room, build, onPeer, onLeft, onMessage, onE
 
   function attach(pc, mine, key) {
     const peer = peerFor(key);
-    const link = { pc, mine, ch: null, role: 0, ready: false, acked: false, gone: false, peer, timer: null, early: [] };
+    const link = { pc, mine, ch: null, fast: null, role: 0, ready: false, acked: false, gone: false, peer, timer: null, early: [] };
     const ch = pc.createDataChannel('galactic', { negotiated: true, id: CHANNEL_ID, ordered: true });
     ch.binaryType = 'arraybuffer';
     link.ch = ch;
+    const fast = pc.createDataChannel('galactic-fast', { negotiated: true, id: FAST_ID, ordered: false, maxRetransmits: 0 });
+    fast.binaryType = 'arraybuffer';
+    link.fast = fast;
+    // Fast data before the role has arrived is dropped: the next one carries it again.
+    fast.onmessage = (e) => {
+      const bytes = new Uint8Array(e.data);
+      if (bytes[0] === DATA && link.ready) onMessage(peer.id, bytes.subarray(1));
+    };
     const sayRole = () => {
       if (link.gone || link.acked || ch.readyState !== 'open') return;
       try { ch.send(new Uint8Array([isHost ? ROLE_HOST : ROLE_JOINER])); } catch (e) { /* closing */ }
@@ -161,7 +175,7 @@ export function open({ isHost, mode, room, build, onPeer, onLeft, onMessage, onE
   function hangUp(link) {
     link.gone = true;
     clearInterval(link.timer);
-    try { link.ch.close(); if (link.mine) link.pc.close(); } catch (e) { /* already closing */ }
+    try { link.ch.close(); if (link.fast) link.fast.close(); if (link.mine) link.pc.close(); } catch (e) { /* already closing */ }
   }
 
   // ---- a room code, through Trystero ----------------------------------------
@@ -266,10 +280,19 @@ export function open({ isHost, mode, room, build, onPeer, onLeft, onMessage, onE
     reply,
     // Host: the joiner's reply.
     accept,
-    // Never drops: what cannot go now waits for the peer's open link.
-    send(id, bytes) {
+    // Never drops: what cannot go now waits for the peer's open link. A
+    // fast message goes on the fast channel when it is open, and otherwise
+    // the reliable way.
+    send(id, bytes, isFast) {
       const peer = byId.get(id);
       if (!peer) return false;
+      const link = peer.link;
+      if (isFast && open(link) && link.fast && link.fast.readyState === 'open') {
+        const framed = new Uint8Array(bytes.length + 1);
+        framed[0] = DATA;
+        framed.set(bytes, 1);
+        try { link.fast.send(framed); return true; } catch (e) { /* fall through to the reliable way */ }
+      }
       peer.queue.push(bytes);
       flush(peer);
       return true;

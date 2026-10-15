@@ -26,6 +26,8 @@ pub struct Input {
     pub flags: u8,
     /// 0 none; 1..=3 take card k; 4..=6 banish card k-3; 7 reroll.
     pub card: u8,
+    /// 0 none; otherwise a move in the rig window (`rig::Move::pack`).
+    pub rig: u16,
 }
 
 pub const AIM: u8 = 1;
@@ -40,6 +42,7 @@ impl Input {
             | (self.ay as u8 as u64) << 24
             | (self.flags as u64) << 32
             | (self.card as u64) << 40
+            | (self.rig as u64) << 48
     }
 
     pub fn unpack(v: u64) -> Input {
@@ -50,6 +53,7 @@ impl Input {
             ay: ((v >> 24) & 0xff) as u8 as i8,
             flags: ((v >> 32) & 0xff) as u8,
             card: ((v >> 40) & 0xff) as u8,
+            rig: ((v >> 48) & 0xffff) as u16,
         }
     }
 }
@@ -203,6 +207,12 @@ pub struct Player {
     pub record: Record,
     /// The last card action, so a held key takes one card.
     pub last_card: u8,
+    /// Ticks of shield left while choosing a card in co-op (T13).
+    #[serde(default)]
+    pub guard: i32,
+    /// The shield was given for the card open now, or not yet spent.
+    #[serde(default)]
+    pub guard_given: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -443,6 +453,8 @@ impl World {
                 shield_cd: 0,
                 record: Record::default(),
                 last_card: 0,
+                guard: 0,
+                guard_given: false,
             });
         }
         let mut w = World {
@@ -495,9 +507,10 @@ impl World {
         self.tick as i32 / TPS
     }
 
-    /// Whether the field waits: a player holds an open card offer.
+    /// Whether the field waits: a player holds an open card offer in a
+    /// solo run. A co-op run goes on and shields the chooser instead (T13).
     pub fn waiting(&self) -> bool {
-        self.players.iter().any(|p| p.offer.is_some())
+        !self.coop && self.players.iter().any(|p| p.offer.is_some())
     }
 
     pub fn xp_needed(content: &Content, level: i32) -> i32 {
@@ -610,6 +623,23 @@ impl World {
             p.shield_cd = (p.shield_cd - 1).max(0);
             let dir = V::new(input.mx as i32, input.my as i32);
             p.moving = !dir.is_zero();
+            // the chooser's shield: given when a card opens, kept while it is
+            // open and afterwards until the player moves, for rearranging the
+            // rigs, but never longer than choose_guard_ms in all
+            if self.coop {
+                if p.offer.is_some() {
+                    if !p.guard_given {
+                        p.guard = ticks(content.run.choose_guard_ms);
+                        p.guard_given = true;
+                    }
+                } else if p.moving {
+                    p.guard = 0;
+                }
+                p.guard = (p.guard - 1).max(0);
+                if p.offer.is_none() && p.guard == 0 {
+                    p.guard_given = false;
+                }
+            }
             if p.moving {
                 p.facing = dir.with_len(px(1));
             }
@@ -874,6 +904,28 @@ impl World {
         out
     }
 
+    /// Calls `f` with each foe whose cell overlaps the box around `p` of
+    /// `r` pixels, in no set order and without a list: for sums that do
+    /// not depend on order (crowd separation, which is most of a late tick).
+    fn each_near(&self, content: &Content, p: V, r: i32, mut f: impl FnMut(usize)) {
+        let side = World::tune(content).cells_per_side;
+        if self.cells.len() != (side * side) as usize {
+            (0..self.foes.len()).for_each(f);
+            return;
+        }
+        let reach = r / CELL_PX + 1;
+        let (cx, cy) = self.cell_xy(content, p);
+        for y in (cy - reach).max(0)..=(cy + reach).min(side - 1) {
+            for x in (cx - reach).max(0)..=(cx + reach).min(side - 1) {
+                for &i in &self.cells[(y * side + x) as usize] {
+                    if (i as usize) < self.foes.len() {
+                        f(i as usize);
+                    }
+                }
+            }
+        }
+    }
+
     fn nearest_player(&self, p: V) -> Option<usize> {
         self.players
             .iter()
@@ -972,9 +1024,10 @@ impl World {
         for (i, mv) in moves.iter_mut().enumerate() {
             let a = &self.foes[i];
             let ra = content.enemies[a.kind].radius;
-            for j in self.near(content, a.pos, ra * 2) {
+            // a sum of pushes: the order the neighbours come in is no matter
+            self.each_near(content, a.pos, ra * 2, |j| {
                 if j == i {
-                    continue;
+                    return;
                 }
                 let b = &self.foes[j];
                 let rb = content.enemies[b.kind].radius;
@@ -992,7 +1045,7 @@ impl World {
                     let share = if rb >= ra { 1 } else { 3 };
                     *mv = mv.add(away.with_len((overlap / 4 * share / 2).max(1)));
                 }
-            }
+            });
         }
         for (f, mv) in self.foes.iter_mut().zip(moves) {
             f.pos = f.pos.add(mv.with_len((mv.len() as i32).min(px(3))));
@@ -1149,7 +1202,7 @@ impl World {
         let shield_full = shield_ticks(content, &self.players[seat].load.stats);
         let invulnerable = ticks(content.run.invulnerable_ms);
         let p = &mut self.players[seat];
-        if !p.alive || p.invulnerable > 0 {
+        if !p.alive || p.invulnerable > 0 || p.guard > 0 {
             return;
         }
         if shield_full > 0 && p.shield_cd == 0 {

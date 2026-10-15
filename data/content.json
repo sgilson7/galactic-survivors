@@ -17,6 +17,7 @@
     "max_level": 5,
     "evolve_partner_level": 3,
     "contact_window_ms": 600,
+    "choose_guard_ms": 8000,
     "invulnerable_ms": 400,
     "hit_freeze_ms": 50,
     "flash_ms": 90,

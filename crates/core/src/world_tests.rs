@@ -37,6 +37,7 @@ fn inputs_pack_and_unpack() {
         ay: -1,
         flags: 3,
         card: 7,
+        rig: 0xbeef,
     };
     assert_eq!(Input::unpack(i.pack()), i);
 }
@@ -389,7 +390,81 @@ fn experience_is_shared_and_both_players_level_together() {
     assert_eq!(w.players[1].pending, 1);
     w.step(&c, &[Input::default(), Input::default()]);
     assert!(w.players[0].offer.is_some() && w.players[1].offer.is_some());
-    assert!(w.waiting(), "the field waits while a card is open");
+    assert!(!w.waiting(), "a co-op run goes on while cards are open (T13)");
+}
+
+#[test]
+fn a_solo_run_waits_while_a_card_is_open() {
+    let c = quiet();
+    let mut w = solo(&c, "pathfinder");
+    w.gain_xp(&c, 6);
+    w.step(&c, &[Input::default()]);
+    assert!(w.players[0].offer.is_some());
+    let t = w.tick;
+    w.step(&c, &[Input::default()]);
+    assert!(w.waiting());
+    assert_eq!(w.tick, t, "the solo field stands still");
+}
+
+#[test]
+fn in_co_op_the_chooser_is_shielded_until_they_move_after_choosing() {
+    let c = quiet();
+    let mut w = World::new(&c, 2, &[load(&c, "pathfinder"), load(&c, "vector")]);
+    w.gain_xp(&c, 6);
+    let still = [Input::default(), Input::default()];
+    w.step(&c, &still);
+    let t = w.tick;
+    w.step(&c, &still);
+    assert_eq!(w.tick, t + 1, "the run goes on while the cards are open");
+    // a hit on a chooser does nothing
+    let hp = w.players[0].hp;
+    w.hurt_player(&c, 0, 50);
+    assert_eq!(w.players[0].hp, hp, "the chooser is shielded");
+    // seat 0 takes a card and stands still: still shielded
+    let take = [
+        Input {
+            card: 1,
+            ..Input::default()
+        },
+        Input::default(),
+    ];
+    w.step(&c, &take);
+    assert!(w.players[0].offer.is_none());
+    w.step(&c, &still);
+    w.hurt_player(&c, 0, 50);
+    assert_eq!(w.players[0].hp, hp, "standing still after choosing keeps the shield");
+    // the first step after choosing ends it
+    let walk = [
+        Input {
+            mx: 127,
+            ..Input::default()
+        },
+        Input::default(),
+    ];
+    w.step(&c, &walk);
+    w.players[0].invulnerable = 0;
+    w.hurt_player(&c, 0, 50);
+    assert!(w.players[0].hp < hp, "moving after choosing drops the shield");
+    // the other player, still choosing, stays shielded
+    let hp1 = w.players[1].hp;
+    w.hurt_player(&c, 1, 50);
+    assert_eq!(w.players[1].hp, hp1);
+}
+
+#[test]
+fn the_choosing_shield_runs_out_after_its_limit() {
+    let c = quiet();
+    let mut w = World::new(&c, 2, &[load(&c, "pathfinder"), load(&c, "vector")]);
+    w.gain_xp(&c, 6);
+    // choose_guard_ms is 8000: 480 ticks
+    for _ in 0..482 {
+        w.step(&c, &[Input::default(), Input::default()]);
+    }
+    assert!(w.players[0].offer.is_some(), "the card is still open");
+    let hp = w.players[0].hp;
+    w.players[0].invulnerable = 0;
+    w.hurt_player(&c, 0, 50);
+    assert!(w.players[0].hp < hp, "a card held past the limit is not a shield");
 }
 
 #[test]

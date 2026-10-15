@@ -18,3 +18,11 @@ Playtest notes from the person's friends, 14 October 2026, split into one row pe
 | T10 | "there should be a glossary for all the moves / upgrades / weapons you get during gameplay" | A codex of every ability, passive and evolution with numbers and recipes, from the title screen and from the pause screen. | d355ae2 | done |
 | T11 | "there should be a reminder you can dash on vector" | Vector sees a dash meter and "Dash ready (Space)", and a prompt under the player until the first dash (R2.18). | d355ae2 | done |
 | T12 | "enemies should be a little tankier given how fast you can evolve" | Enemy health ×1.4 (but the two first-minute enemies), faster growth per minute, a steeper experience curve, and evolutions need the partner passive at level 3. Focused probes evolve at 3:12–6:20, was 2:45–4:11 (R2.7, R2.11). | d355ae2 | done |
+
+Requests from the person, 15 October 2026 (research and plan in the private design journal; no code yet):
+
+| # | The request, word for word | What was done | Commit | Status |
+| --- | --- | --- | --- | --- |
+| T13 | "the networking right now is real tough, we are constantly lagging out pretty bad … is there roll back netcode like raiders of the lost mart? im thinking we try and do as much as humanely possible as client side calculations / updates" | Researched: the whole run already runs in each browser and only inputs cross the wire, but co-op is delay-based lockstep (100 ms own-input delay, stalls on any late input). Plan: port Raiders' rollback. | | planned |
+| T14 | "the designer wants a lot more abilities and passives added to the game, stuff like orbital cannons firing around you that draw circles that get lit on fire and deal damage, you leave mines behind you, you can draw shapes with your movement to draw runes that give stacking passives, etc." | Researched; new abilities, passives, ground fields and rune tracing planned. | | planned |
+| T15 | "the designer said that the abilities should be in some way combinable and very open ended and free-form like the game noita" | Researched Noita's wand rules; a socketed ability system planned. | | planned |

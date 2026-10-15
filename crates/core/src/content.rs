@@ -34,6 +34,10 @@ pub struct RunRules {
     pub evolve_partner_level: i32,
     pub contact_window_ms: i32,
     pub invulnerable_ms: i32,
+    /// In co-op the run goes on while a player chooses a card; the chooser
+    /// is shielded for at most this long (T13, the person's answer 1).
+    #[serde(default)]
+    pub choose_guard_ms: i32,
     pub hit_freeze_ms: i32,
     pub flash_ms: i32,
     pub knockback: i32,

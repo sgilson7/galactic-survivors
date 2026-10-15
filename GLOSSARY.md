@@ -28,6 +28,16 @@ One choice offered at a level-up or after a rift: a new ability, a higher level 
 
 Two players in one run, each in their own browser, connected directly to each other. Both players share experience and level up together.
 
+### Ping
+
+The time a message takes to reach the other co-op player and come back, in milliseconds. Shown at the top right during a co-op run.
+
+### Correction
+
+In co-op, each browser moves your partner as if they kept doing what they last did, then puts it right when their real input arrives. Each time that happens is one correction, counted at the top right during a co-op run.
+
+Not: rollback, desync
+
 ### Elite
 
 A strong single enemy, the Stalker, met inside a rift.
@@ -50,7 +60,7 @@ Not: coins, credits, money
 
 ### Level-up
 
-The moment the shared experience bar fills. The field waits while each player chooses one card.
+The moment the shared experience bar fills. In a solo run the field waits while you choose one card. In co-op the run goes on, and a player choosing is shielded until they move after choosing, for a few seconds at most.
 
 ### Build
 

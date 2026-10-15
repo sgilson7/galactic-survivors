@@ -353,7 +353,8 @@
     "rift": "Rift closes in {t} s",
     "dash_ready": "Dash ready (Space)",
     "dash_wait": "Dash recharging",
-    "dash_prompt": "Press Space to dash through danger"
+    "dash_prompt": "Press Space to dash through danger",
+    "net": "Ping {ms} ms · {fixes} corrections · waited {wait} s"
   },
   "about": {
     "pathfinder": "A balanced explorer whose shoulder drone aims for you, and who fires an extra shot at levels ten and twenty.",

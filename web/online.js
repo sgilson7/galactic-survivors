@@ -59,7 +59,7 @@ export function makeOnline(game, build) {
     },
     pump() {
       if (!link) return;
-      for (const [id, text] of JSON.parse(game.net_outbox())) link.send(id, encoder.encode(text));
+      for (const [id, text, fast] of JSON.parse(game.net_outbox())) link.send(id, encoder.encode(text), fast);
       if (!game.net_active()) close();
     },
     close,

@@ -261,7 +261,12 @@ pub fn frame(g: &Game) -> Vec<i32> {
 
     // players
     for p in &w.players {
-        let at = cam.at(p.pos);
+        // the partner glides after a correction (T13)
+        let pos = match g.partner_drawn {
+            Some(drawn) if p.seat != g.seat && w.players.len() > 1 => drawn,
+            _ => p.pos,
+        };
+        let at = cam.at(pos);
         let size = cam.len(64);
         let ch = &c.characters[p.character];
         let alpha = if p.alive { 1000 } else { 400 };
@@ -435,6 +440,26 @@ fn hud(d: &mut DrawList, g: &Game, w: &World, c: &Content) {
         Align::Right,
         &g.text.fill("hud.kills", &[("n", me.record.kills.to_string())]),
     );
+    // the connection, so players can say what they saw (T13)
+    if let Some(n) = g.session.as_ref().filter(|n| n.running) {
+        let st = n.stats;
+        let wait_tenths = st.stalls as i64 * 10 / crate::geom::TPS as i64;
+        d.text(
+            vw - 16,
+            58,
+            14,
+            Color::Rock,
+            Align::Right,
+            &g.text.fill(
+                "hud.net",
+                &[
+                    ("ms", (st.rtt_us / 1000).to_string()),
+                    ("fixes", st.rollbacks.to_string()),
+                    ("wait", format!("{}.{}", wait_tenths / 10, wait_tenths % 10)),
+                ],
+            ),
+        );
+    }
     if w.in_rift {
         let s = (w.rift_left / crate::geom::TPS).max(0);
         d.text(

@@ -112,17 +112,17 @@
     "test": "another_build_or_protocol_is_turned_away_with_a_reason"
   },
   {
-    "name": "a tick runs on a guess",
+    "name": "a wrong guess is never put right",
     "file": "crates/core/src/online.rs",
-    "find": "let b = *self.inputs[1].get(&t)?;",
-    "replace": "let b = self.inputs[1].get(&t).copied().unwrap_or(0);",
-    "test": "a_copy_waits_for_the_other_seat_and_does_not_guess"
+    "find": "                    self.rollback_to = Some(self.rollback_to.map_or(t, |r| r.min(t)));",
+    "replace": "",
+    "test": "a_wrong_guess_is_rolled_back_and_both_copies_agree_on_every_confirmed_tick"
   },
   {
     "name": "co-op runs ahead of the clock",
     "file": "crates/core/src/game.rs",
-    "find": "self.coop_due = (self.coop_due + budget as i32)",
-    "replace": "self.coop_due = (self.coop_due + 3 * budget as i32)",
+    "find": "let mut due = tick_bits.len() as u32;",
+    "replace": "let mut due = 3 * tick_bits.len() as u32;",
     "test": "two_games_play_one_co_op_run_and_hold_the_same_world"
   },
   {
@@ -313,5 +313,89 @@
     "find": "    if w.evolvable(c, seat) == Some(k) {\n        return t.fill(\"recipe.ready\"",
     "replace": "    if w.evolvable(c, seat) == Some(99) {\n        return t.fill(\"recipe.ready\"",
     "test": "the_build_says_when_an_ability_is_ready_to_evolve"
+  },
+  {
+    "name": "a guess repeats a card",
+    "file": "crates/core/src/online.rs",
+    "find": ".map(|(_, k)| *k & HELD_MASK)",
+    "replace": ".map(|(_, k)| *k)",
+    "test": "a_guess_repeats_movement_but_never_a_one_shot_action"
+  },
+  {
+    "name": "guesses run without limit",
+    "file": "crates/core/src/online.rs",
+    "find": "if self.current >= self.confirmed() + MAX_AHEAD {",
+    "replace": "if false {",
+    "test": "a_browser_runs_at_most_max_ahead_ticks_on_guesses"
+  },
+  {
+    "name": "own input waits six ticks",
+    "file": "crates/core/src/online.rs",
+    "find": "pub const DELAY: u32 = 2;",
+    "replace": "pub const DELAY: u32 = 6;",
+    "test": "in_co_op_your_own_move_shows_within_three_ticks"
+  },
+  {
+    "name": "a lost input is never sent again",
+    "file": "crates/core/src/online.rs",
+    "find": "let from = self.acked.max(self.upto[me].saturating_sub(MAX_BATCH as u32));",
+    "replace": "let from = self.upto[me].saturating_sub(1);",
+    "test": "a_wrong_guess_is_rolled_back_and_both_copies_agree_on_every_confirmed_tick"
+  },
+  {
+    "name": "a one-shot action rides every tick",
+    "file": "crates/core/src/online.rs",
+    "find": "            self.record(me, t, held | extra);\n            extra = 0;",
+    "replace": "            self.record(me, t, held | extra);",
+    "test": "a_one_shot_action_rides_on_one_tick_only"
+  },
+  {
+    "name": "a guessed tick is never checksummed",
+    "file": "crates/core/src/online.rs",
+    "find": "        for (t, s) in due_sums {\n            self.check_sum(t, s);\n        }",
+    "replace": "        let _ = due_sums;",
+    "test": "a_wrong_guess_is_rolled_back_and_both_copies_agree_on_every_confirmed_tick"
+  },
+  {
+    "name": "the round trip is halved",
+    "file": "crates/core/src/online.rs",
+    "find": "let rtt = (now_us - us).max(0);",
+    "replace": "let rtt = ((now_us - us) / 2).max(0);",
+    "test": "a_ping_comes_back_as_a_round_trip"
+  },
+  {
+    "name": "the chooser is not shielded",
+    "file": "crates/core/src/world.rs",
+    "find": "if !p.alive || p.invulnerable > 0 || p.guard > 0 {",
+    "replace": "if !p.alive || p.invulnerable > 0 {",
+    "test": "in_co_op_the_chooser_is_shielded_until_they_move_after_choosing"
+  },
+  {
+    "name": "the choosing shield never runs out",
+    "file": "crates/core/src/world.rs",
+    "find": "                p.guard = (p.guard - 1).max(0);\n",
+    "replace": "",
+    "test": "the_choosing_shield_runs_out_after_its_limit"
+  },
+  {
+    "name": "moving after choosing keeps the shield",
+    "file": "crates/core/src/world.rs",
+    "find": "                } else if p.moving {\n                    p.guard = 0;\n                }",
+    "replace": "                }",
+    "test": "in_co_op_the_chooser_is_shielded_until_they_move_after_choosing"
+  },
+  {
+    "name": "a co-op run waits for cards",
+    "file": "crates/core/src/world.rs",
+    "find": "!self.coop && self.players.iter().any(|p| p.offer.is_some())",
+    "replace": "self.players.iter().any(|p| p.offer.is_some())",
+    "test": "in_co_op_the_chooser_is_shielded_until_they_move_after_choosing"
+  },
+  {
+    "name": "a solo run goes on during cards",
+    "file": "crates/core/src/world.rs",
+    "find": "!self.coop && self.players.iter().any(|p| p.offer.is_some())",
+    "replace": "false",
+    "test": "a_solo_run_waits_while_a_card_is_open"
   }
 ]

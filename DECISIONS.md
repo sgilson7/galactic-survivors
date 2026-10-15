@@ -35,3 +35,25 @@ The agent decided: the salvage cache, paid with tickets earned in play, odds and
 (TRIAGE T4) The agent decided: an 8 by 7 grid, four starting tiles, four-way neighbours. The +1% XP per achievement was dropped (SECOND-ORDER R2.1).
 
 The updated game was published to its own GitHub Pages site under the brief's grant: "I approve the creation of a public github repo, and a public github pages to host the tool." The website listing was not redeployed; the person's grant for the website covered adding the listing.
+
+## 2026-10-15
+
+> ok so the networking right now is real tough, we are constantly lagging out pretty bad. what is done client side versus sent over the wire? is there roll back netcode like raiders of the lost mart? im thinking we try and do as much as humanely possible as client side calculations / updates.
+
+> lagging out meant both screens micro freezing as ping increased
+
+The agent decided: co-op moves from delay lockstep to rollback, after Raiders of the Lost Mart's `rollback.rs` (TRIAGE T13).
+
+> 1. shield player who is choosing
+
+The agent decided: in co-op the run keeps going while a player chooses a card, and the chooser is shielded (TRIAGE T13).
+
+> the designer said that the abilities should be in some way combinable and very open ended and free-form like the game noita
+
+> 3. you can re-arrange at any time during gameplay by opening your inventory and moving things around, but the game is still playing so you need to wasd and suffer the consequences of not having a weapon built potentially. you can also change your rigs after a level up during shielded time to let you optimize 4. never misfire or shuffle 5. achievements and salvage cache can add rare bizarre ones
+
+The agent decided: rigs of sockets and parts, read left to right, never shuffled (TRIAGE T15). The rig window opens during play without pausing; while a card is open the chooser is shielded and may rearrange. Rare parts are opened by achievements and pulled from the salvage cache.
+
+> 6. update and redeploy website listing ,keep prose succinct and written with astra v2 style guide found in another directory
+
+The agent may update `content/projects/galactic-survivors.md` on sgilson7.github.io and redeploy the website for it.

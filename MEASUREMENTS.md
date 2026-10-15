@@ -47,6 +47,29 @@ Same command, on the final numbers (`xp_first` 6, `xp_step` 6, `xp_late_level` 1
 
 A new character now wins one run in six against the bot's play, down from four in six, and a fully upgraded one wins all six, so the outfitter and gear now decide whether a run is won. Focused evolutions moved from 2:45–4:11 to 3:12–6:20. Two steeper curves were tried first: `xp_step` 4 let a Breaker evolve at 1:29, and `xp_step` 7 lost all six plain runs and the co-op run. The bot takes the first card and never aims, so its early losses (Pathfinder at 0:53) say more about the bot than about a person; how hard a first run feels is the person's to judge (SECOND-ORDER R2.13).
 
+## Cost of one tick, for rollback (15 October 2026)
+
+A throwaway probe (not kept) ran the run bot natively in release and timed `World::step`, `World::clone` and fourteen re-run ticks. Rollback keeps one copy of the world a tick and re-runs ticks when a guess about the partner's input was wrong, so these decide how far back a re-run can reach inside a 16 ms frame.
+
+| Run | Peak enemies | Mean tick | Worst tick | Worst copy of the world | 14 ticks re-run (with the bot) |
+| --- | --- | --- | --- | --- | --- |
+| Solo Pathfinder, seed 3 (lost at 7:20) | 320 | 370 µs | 957 µs | 25 µs | 7.1–8.3 ms |
+| Co-op Pathfinder and Breaker, seed 3, to 13:00 | 320 | 345 µs | 1,001 µs | 24 µs | up to 10.4 ms |
+
+The world as JSON is 84–138 KB late in a run, too large to send every tick, which rules out sending the world instead of inputs. These are native numbers; the browser (WebAssembly) is not yet measured and is likely slower.
+
+### In the browser, and after speeding up the tick (15 October 2026)
+
+A throwaway WebAssembly harness (not kept) ran a co-op Pathfinder and Breaker with every outfitter rank, by a kiting bot, to 12:00, and timed 600 ticks from a kept copy at each two-minute mark (320 enemies from 4:00 on). Times are per tick, from 4:00 to 12:00.
+
+| Engine | Before: mean tick | After: mean tick | After: worst single tick | Copy of the world | After: 8 ticks re-run |
+| --- | --- | --- | --- | --- | --- |
+| Chromium | 691–771 µs | 360–396 µs | 500 µs | ≤ 8 µs | 3.2 ms |
+| Firefox | 805–892 µs | 380–418 µs | 2,000 µs (timer step) | ≤ 15 µs | 3.4 ms |
+| WebKit | 737–818 µs | 385–423 µs | 1,000 µs (timer step) | ≤ 10 µs | 3.4 ms |
+
+The system sampler put about two thirds of a late tick in `World::near` called from crowd separation: a list built and sorted for each of 320 enemies. Separation adds pushes, so the order does not matter, and it now walks the grid cells directly (`each_near`). The same bot run natively went from 645 µs to 287 µs a tick. Firefox and WebKit round `performance.now` to a millisecond, so their worst single tick is a timer step.
+
 ## Not measured
 
 - Frame rate on a phone or an older laptop with many enemies on screen.

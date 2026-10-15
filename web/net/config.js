@@ -16,7 +16,7 @@ export const CONFIG = {
   appId: "galactic-survivors-p2p",
 
   // The core's PROTOCOL. The room name is appId, this tag and the code.
-  protocol: 1,
+  protocol: 2,
 
   // The vendored Trystero bundle, pinned in vendor/SHA256SUMS and checked by
   // scripts/build.sh. Imported only when a player uses a room code.
@@ -49,6 +49,11 @@ export const CONFIG = {
   // The negotiated data channel's stream id. Not 0 or 1: Trystero opens its
   // own in-band channel from 0 upwards.
   channelId: 40,
+
+  // The fast channel's stream id: unordered and never resent, for inputs
+  // and pings only. A lost input is carried again by the next message, so
+  // nothing waits behind it (T13).
+  fastChannelId: 41,
 
   // The first byte of every frame: who sent it, an acknowledgement, or data.
   frame: { host: 0x48, joiner: 0x4a, ack: 0x41, data: 0x44 },

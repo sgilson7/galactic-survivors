@@ -1867,6 +1867,7 @@ mod tests {
             "hud.level",
             "hud.kills",
             "hud.rift",
+            "hud.net",
         ] {
             g.text.get(key);
         }
