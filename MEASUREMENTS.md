@@ -121,6 +121,10 @@ Sweeps run, every one with no rule broken:
 
 At 8,200 a second: all of length 5 takes 16.5 hours, all of length 6 37 days, and all four-token rigs at every level 1.1 days. A tweak to one part's numbers touches 6.7% of four-token rigs, one ability's 7.4%.
 
+## The rig logbook's first run (15 October 2026, T21)
+
+From commit 0242533, `RIG_BUDGET_S=7200`: every rig of one to four tokens at level 1, 8,926,258 in all, in 1,544 s (25.7 minutes, about 5,800 a second with writing the log). No rule broken; 164 rigs noted, all a field after Wormhole that never landed. The local log `rig-log/` is 1.5 GB; the repository's `tests/rig-log/` is 204 KB (2,446 block lines, 164 notable rigs).
+
 ## Not measured
 
 - Frame rate on a phone or an older laptop with many enemies on screen.

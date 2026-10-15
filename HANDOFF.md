@@ -44,6 +44,12 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 - **Three bugs it found, fixed:** a Wormhole shot spent itself on the enemy it came out of (R4.2); a formation dropped Wake Mines while the player stood still (R4.3). Two design questions went to the person (R4.4, R4.5).
 - **The logbook** (T18) is designed in the journal's sixth tab, not built (R4.8).
 
+## What changed after the person's answers (15 October 2026, TRIAGE T19–T21)
+
+- **Each copy of a formation on Tether keeps its own line** (R4.4): the partner first, then what the player placed, farthest first; a copy with nothing to join reaches out its own way.
+- **Orbits and tethers leave ground fields** (R4.5): an orbiting body where it hits, then not again for one full turn (`fields.orbit_turns`); a tether where it cuts, at most every two seconds (`fields.tether_ms`).
+- **The rig logbook** (R4.8–R4.10): `cargo test -p tool_core --test rig_space -- --ignored --nocapture logbook` plays only rigs whose line is missing or stale. The full log is `rig-log/` (local, 1.5 GB); `tests/rig-log/` is the summary in git. Its first run found a panic (R4.10), now fixed and replayed every day from `FOUND`.
+
 ## What passed
 
 | Check | Result |
@@ -52,6 +58,8 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `./scripts/count-tests.sh`, after round 4 | 178 passed, 0 failed, 2 ignored (the probe and the rig sweep) |
 | `python3 scripts/break_tests.py`, after round 4 | 87 of 87 planted defects caught |
 | Live check after publishing 8a320ea (`BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py`) | PASSED in all three engines |
+| `./scripts/check.sh` on a clean copy of 0242533, then `scripts/publish.sh`; live check after publishing | BUILDER CHECK PASSED; live PASSED in all three engines, 15 Oct 2026 |
+| Rig logbook, first full run from 0242533 | all 8,926,258 rigs of 1–4 tokens at level 1 in 25.7 min; no rule broken; 164 noted (a field after Wormhole that never landed) |
 | Rig sweeps, after round 4 (`rig_space` `sweep`) | every rig of 3 tokens at levels 1 and 5, and of 4 tokens at level 1 (8,772,732), and 200,000 each of 5 and 6: no rule broken |
 | `./scripts/check.sh`, after round 3 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `python3 tests/browser/online.py chromium firefox webkit`, after round 3 (rollback and the fast channel) | ONLINE CHECK PASSED |
@@ -95,9 +103,6 @@ From the first build:
 
 ## Rows for the person
 
-- R4.4: formations on Tether do nothing but add load.
-- R4.5: field modifiers on Orbit Drones, Halo Guard and Tether do nothing but add load.
-- R4.8: whether to build the rig logbook, and where its full log lives.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
 - R3.18: the names and texts of the new content were written by the agent.
@@ -118,6 +123,8 @@ From the first build:
 - No sound.
 
 ## What the next session must not assume
+
+- That `rig-log/` exists on another computer. It is local; a fresh clone rebuilds it with the `logbook` test (about 20 minutes for every rig of four tokens or fewer).
 
 - That co-op works between two homes. It has been seen working only between two tabs on one machine.
 - That the balance is right. The playtest round made runs much harder against a bot; no person has played it yet. Every number is in `data/content.json`; change balance there, not in code.

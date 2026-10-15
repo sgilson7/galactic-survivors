@@ -33,4 +33,12 @@ Requests from the person, 15 October 2026, after round 3:
 | --- | --- | --- | --- | --- |
 | T16 | "the cooldown of the weapon should be controlled by the first ability, not the highest cooldown ability in the rig" | The first payload before the first trigger sets a rig's recharge; parts still add load (R4.1). | 1879220 | done |
 | T17 | "what is the state of testing over rigs? … I want to test and make sure as many permutations of realistic rigs are tested to ensure they have the proper behavior. first do a pass over test run times and test setup, then figure out how many permutations we can test per second, then give figures for our coverage of the sample space given how much time we spend testing" | A rig space test plays rigs in a fixed scene against ten rules; about 8,200 rigs a second on 12 cores. Everyday: 4,811 plays in 0.6 s. Swept: every rig of up to four sockets. It found three bugs, now fixed (R4.2, R4.3) or the person's (R4.4, R4.5). Figures in MEASUREMENTS and the journal's sixth tab (R4.6–R4.8). | 1879220 | done |
-| T18 | "keep permutations that have been tested in a logbook, noting its behavior when played, last time tested, and conditions for needing to be retested, so we can try to overtime build a log with essentially every permutation as a log line" | Designed in the journal's sixth tab; not built (R4.8). | — | open |
+| T18 | "keep permutations that have been tested in a logbook, noting its behavior when played, last time tested, and conditions for needing to be retested, so we can try to overtime build a log with essentially every permutation as a log line" | Built: the ignored `logbook` test keeps a line per rig in `rig-log/` (local) and a summary in `tests/rig-log/` (R4.8–R4.10). | 0242533 | done |
+
+Answers from the person to the journal's sixth tab, 15 October 2026:
+
+| # | The request, word for word | What was done | Commit | Status |
+| --- | --- | --- | --- | --- |
+| T19 | "yes" (formations on Tether: one tether for each copy) | Each copy joins the next end, or reaches out its own way (R4.4). | 0242533 | done |
+| T20 | "after x full rotations of an orb, it can leave a field again, i leave x up to you based on gameplay feel" | One turn (`orbit_turns`); a tether, every two seconds (R4.5). | 0242533 | done |
+| T21 | "yes build the logbook, keep it locally, publish a scoped down one to the repo" | `rig-log/` stays local; `tests/rig-log/` holds the summary (R4.8). | 0242533 | done |
