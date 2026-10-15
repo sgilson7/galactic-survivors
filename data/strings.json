@@ -411,7 +411,11 @@
     "dash_ready": "Dash ready (Space)",
     "dash_wait": "Dash recharging",
     "dash_prompt": "Press Space to dash through danger",
-    "net": "Ping {ms} ms · {fixes} corrections · waited {wait} s"
+    "net": "Ping {ms} ms · {fixes} corrections · waited {wait} s",
+    "rune": "{rune} ×{n} · {effect} · {t} s",
+    "rune_circle": "+{n} armor",
+    "rune_triangle": "+{n}% damage",
+    "rune_square": "+{n}% area"
   },
   "about": {
     "pathfinder": "A balanced explorer whose shoulder drone aims for you, and who fires an extra shot at levels ten and twenty.",

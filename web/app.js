@@ -183,6 +183,15 @@ function button(a) {
   return b;
 }
 
+// A rune chip over the build strip (after Gear Master 2D's curse chips):
+// the words are the core's, the colour follows the shape.
+function chip(c) {
+  const node = make("span", c.title, "chip");
+  node.id = `chip-${c.id}`;
+  node.dataset.tone = c.tone;
+  return node;
+}
+
 function item(it) {
   const box = make("article", undefined, "item");
   box.id = `item-${it.id}`;
@@ -269,6 +278,7 @@ function render(force) {
   el("overlay").replaceChildren(...(ui.overlay ? [panel(ui.overlay)] : []));
   el("overlay").hidden = !ui.overlay;
   el("build").replaceChildren(...(ui.build || []).map(item));
+  el("chips").replaceChildren(...(ui.chips || []).map(chip));
   if (ui.notice) message(ui.notice);
 }
 

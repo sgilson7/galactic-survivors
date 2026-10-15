@@ -817,5 +817,33 @@
     "find": "        text: if g.saved_since_run || g.store_ok != Some(false) {",
     "replace": "        text: if g.saved_since_run {",
     "test": "the_download_reminder_shows_only_when_the_browser_will_not_keep_the_save"
+  },
+  {
+    "name": "the run shows no rune chips (T26)",
+    "file": "crates/core/src/view.rs",
+    "find": "    ui.chips = rune_chips(g, w, me.seat);\n",
+    "replace": "    let _ = rune_chips;\n",
+    "test": "rune_chips_show_each_shape_its_stacks_and_the_next_to_wear_off"
+  },
+  {
+    "name": "a rune chip counts down the last stack, not the next to wear off (T26)",
+    "file": "crates/core/src/view.rs",
+    "find": "            let soonest = *held.iter().min()?;",
+    "replace": "            let soonest = *held.iter().max()?;",
+    "test": "rune_chips_show_each_shape_its_stacks_and_the_next_to_wear_off"
+  },
+  {
+    "name": "a rune chip shows one stack's bonus, not the stacks' together (T26)",
+    "file": "crates/core/src/view.rs",
+    "find": "(n * rune_bonus(&g.content, shape)).to_string()",
+    "replace": "rune_bonus(&g.content, shape).to_string()",
+    "test": "rune_chips_show_each_shape_its_stacks_and_the_next_to_wear_off"
+  },
+  {
+    "name": "a rune chip rounds its seconds down and can read 0 while held (T26)",
+    "file": "crates/core/src/view.rs",
+    "find": "((soonest + tps - 1) / tps).to_string()",
+    "replace": "(soonest / tps).to_string()",
+    "test": "rune_chips_show_each_shape_its_stacks_and_the_next_to_wear_off"
   }
 ]

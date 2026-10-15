@@ -80,6 +80,10 @@ pub struct Ui {
     /// The run's build strip under the canvas.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub build: Vec<Item>,
+    /// The rune stacks you hold, one chip a shape, with how long until the
+    /// next one wears off. Each chip is a title and a tone (the shape).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chips: Vec<Item>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub notice: String,
     pub reduced_motion: bool,
@@ -1060,11 +1064,7 @@ pub fn codex(g: &Game) -> Panel {
             for shape in crate::rune::Shape::ALL {
                 let id = format!("rune_{}", shape.name());
                 let r = &c.runes;
-                let n = match shape {
-                    crate::rune::Shape::Circle => r.circle_armor,
-                    crate::rune::Shape::Triangle => r.triangle_damage_pct,
-                    crate::rune::Shape::Square => r.square_area_pct,
-                };
+                let n = rune_bonus(c, shape);
                 items.push(Item {
                     id: id.clone(),
                     icon: format!("icons/{id}"),
@@ -1931,6 +1931,60 @@ fn build_details(g: &Game, w: &crate::world::World, seat: usize) -> Vec<Item> {
     items
 }
 
+/// What one stack of a rune shape gives: armour, or a percent of damage or
+/// area. The values `World::stat_total` adds for each stack.
+fn rune_bonus(c: &crate::content::Content, shape: crate::rune::Shape) -> i32 {
+    let r = &c.runes;
+    match shape {
+        crate::rune::Shape::Circle => r.circle_armor,
+        crate::rune::Shape::Triangle => r.triangle_damage_pct,
+        crate::rune::Shape::Square => r.square_area_pct,
+    }
+}
+
+/// One chip for each rune shape a player holds, after Gear Master 2D's curse
+/// chips: the shape, its stacks, what they give together, and the whole
+/// seconds until the next stack wears off (rounded up, so a chip never reads
+/// 0 while it is still held).
+fn rune_chips(g: &Game, w: &crate::world::World, seat: usize) -> Vec<Item> {
+    let t = &g.text;
+    let stacks = &w.players[seat].rune_stacks;
+    crate::rune::Shape::ALL
+        .iter()
+        .filter_map(|&shape| {
+            let held: Vec<i32> = stacks
+                .iter()
+                .filter(|s| s.shape == shape)
+                .map(|s| s.left)
+                .collect();
+            let soonest = *held.iter().min()?;
+            let n = held.len() as i32;
+            let id = format!("rune_{}", shape.name());
+            let tps = crate::geom::TPS;
+            Some(Item {
+                id: id.clone(),
+                title: t.fill(
+                    "hud.rune",
+                    &[
+                        ("rune", t.name(&id)),
+                        ("n", n.to_string()),
+                        (
+                            "effect",
+                            t.fill(
+                                &format!("hud.{id}"),
+                                &[("n", (n * rune_bonus(&g.content, shape)).to_string())],
+                            ),
+                        ),
+                        ("t", ((soonest + tps - 1) / tps).to_string()),
+                    ],
+                ),
+                tone: shape.name().into(),
+                ..Item::default()
+            })
+        })
+        .collect()
+}
+
 fn run(g: &Game, ui: &mut Ui) {
     let t = &g.text;
     let Some(w) = g.world.as_ref() else { return };
@@ -2037,6 +2091,7 @@ fn run(g: &Game, ui: &mut Ui) {
             ..Item::default()
         });
     }
+    ui.chips = rune_chips(g, w, me.seat);
     for slot in &me.passives {
         ui.build.push(Item {
             id: slot.id.clone(),
@@ -2259,6 +2314,47 @@ mod tests {
     }
 
     #[test]
+    fn rune_chips_show_each_shape_its_stacks_and_the_next_to_wear_off() {
+        use crate::rune::Shape;
+        use crate::world::RuneStack;
+        let mut g = game();
+        g.act("run.start", "").unwrap();
+        assert!(build(&g).chips.is_empty(), "no runes, no chips");
+        // worked by hand at 60 ticks a second: 870 ticks is 14.5 s, shown as
+        // 15; 61 ticks is just over 1 s, shown as 2; a triangle stack gives
+        // 6% damage and a circle stack 1 armor
+        g.world.as_mut().unwrap().players[0].rune_stacks = vec![
+            RuneStack {
+                shape: Shape::Triangle,
+                left: 1200,
+            },
+            RuneStack {
+                shape: Shape::Circle,
+                left: 61,
+            },
+            RuneStack {
+                shape: Shape::Triangle,
+                left: 870,
+            },
+        ];
+        let ui = build(&g);
+        let shown: Vec<(&str, &str)> = ui
+            .chips
+            .iter()
+            .map(|c| (c.title.as_str(), c.tone.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            vec![
+                ("Circle rune ×1 · +1 armor · 2 s", "circle"),
+                ("Triangle rune ×2 · +12% damage · 15 s", "triangle"),
+            ]
+        );
+        g.world.as_mut().unwrap().players[0].rune_stacks[1].left = 60;
+        assert_eq!(build(&g).chips[0].title, "Circle rune ×1 · +1 armor · 1 s");
+    }
+
+    #[test]
     fn the_build_says_when_an_ability_is_ready_to_evolve() {
         let mut g = game();
         g.act("run.start", "").unwrap();
@@ -2462,6 +2558,10 @@ mod tests {
             "hud.kills",
             "hud.rift",
             "hud.net",
+            "hud.rune",
+            "hud.rune_circle",
+            "hud.rune_triangle",
+            "hud.rune_square",
         ] {
             g.text.get(key);
         }

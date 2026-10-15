@@ -62,10 +62,18 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 - **The browser keeps the save by itself** (R4.22), after every run and every purchase, and restores it when the page opens. Download and Load stay, as a backup and for another computer. A private window that refuses storage is told so, and Results then asks for a download. A save the browser holds but the game cannot read is set aside, not written over.
 - Every way out of co-op keeps what the run paid (R4.21, now tested).
 
+## What changed for runes (15 October 2026, TRIAGE T26)
+
+- **Rune chips** (R4.23): over the build strip, one chip for each rune shape you hold, after Gear Master 2D's curse chips. It names the shape, the stacks, what they give together and the seconds until the next stack wears off, for example "Triangle rune ×2 · +12% damage · 15 s".
+- R4.24 asks which spelling the game uses: one rune text says "armour", the rest "armor".
+
 ## What passed
 
 | Check | Result |
 | --- | --- |
+| `./scripts/check.sh`, after rune chips (T26) | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
+| `./scripts/count-tests.sh`, after rune chips | 202 passed, 0 failed, 3 ignored |
+| `python3 scripts/break_tests.py "(T26)"` | 4 of 4 caught |
 | `scripts/publish.sh` from bc9198b (browser saving, T25), then the live check | BUILDER CHECK PASSED; live PASSED in all three engines, including "the save survives a reload", 15 Oct 2026 |
 | `./scripts/count-tests.sh`, after browser saving | 201 passed, 0 failed, 3 ignored |
 | `python3 scripts/break_tests.py T25`, plus the two co-op progress rows | 8 of 8 caught |
@@ -104,6 +112,9 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 
 ## Try these by hand first
 
+After rune chips:
+1. Walk a square in a run: a gold chip should appear at the bottom left and count down from 20 s. Walk two more: it should read ×3 and +18% area.
+
 After browser saving:
 1. Play a run, close the tab, and open the game again: your gold and the run should still be there.
 2. Open the game in a private window: the save panel should say the browser is not keeping your save.
@@ -136,6 +147,7 @@ From the first build:
 ## Rows for the person
 
 - R4.18: the lobby between two computers, by room code and by link.
+- R4.24: "armour" or "armor".
 - R4.20: how to bound the effects a rig like Ring, Swarm Battery, On Hit, Twin, Sweep Cannon can pile up.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.

@@ -38,6 +38,10 @@
   --slick: #6a5a8c;
   --steam: #d9d4e8;
   --trail: #8f86ad;
+  /* rune chips: Gear Master 2D's frost, searing and misfire */
+  --rune-circle: #5aa8d8;
+  --rune-triangle: #c2643f;
+  --rune-square: #c8a33f;
   --accent: #b8e04a;
   --line: #3b3650;
   --common: #a69fbd;
@@ -268,7 +272,23 @@ kbd { font: 600 12px var(--hud-font); border: 1px solid currentColor; padding: 1
   pointer-events: none;
   z-index: 2;
 }
+#hold { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 #build { display: flex; flex-wrap: wrap; gap: 6px; }
+/* rune chips (after Gear Master 2D's curse chips): a solid block per shape,
+   dark words on it, the shape named in words as well as by colour */
+#chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#chips:empty { display: none; }
+.chip {
+  font: 700 13px/1 var(--hud-font);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--muted);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.chip[data-tone="circle"] { background: var(--rune-circle); }
+.chip[data-tone="triangle"] { background: var(--rune-triangle); }
+.chip[data-tone="square"] { background: var(--rune-square); }
 #build .item { padding: 4px; gap: 4px; border-left-width: 3px; background: rgba(20, 17, 28, 0.7); }
 #build .item img { width: 32px; height: 32px; }
 #build .item h3, #build .item p { display: none; }
