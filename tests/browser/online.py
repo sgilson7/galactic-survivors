@@ -41,12 +41,15 @@ DIST = ROOT / "dist"
 STRINGS = json.loads((ROOT / "data" / "strings.json").read_text())
 
 # The page's co-op flow: the co-op screen, its "Host by invitation" and
-# "Answer an invitation" buttons, and the one text box (#ask-text) that
+# "Answer an invitation" buttons (behind "Can't connect with a code?"), the
+# partner's Ready (T24), and the one text box (#ask-text) that
 # shows or takes a code. The core's session status and the run's tick are
 # on <body> as data-net and data-tick.
 COOP = "button[data-action='screen.show'][data-value='coop']"
 INVITE = "button[data-action='page.invite']"
 REPLY = "button[data-action='page.reply']"
+MORE = "button[data-action='coop.more']"
+READY = "button[data-action='coop.ready']"
 START = "button[data-action='coop.start']:not([disabled])"
 TIMEOUT_MS = 15000
 
@@ -109,6 +112,7 @@ def run(p, engine, origin):
 
     for page in (host, joiner):
         page.click(COOP)
+        page.click(MORE)
     host.click(INVITE)
     host.wait_for_selector("#ask-text", timeout=TIMEOUT_MS)
     offer = ""
@@ -133,8 +137,9 @@ def run(p, engine, origin):
 
     host.fill("#ask-text", answer)
     host.click("#ask button >> nth=1")
+    joiner.click(READY, timeout=TIMEOUT_MS)
     host.wait_for_selector(START, timeout=TIMEOUT_MS)
-    check(True, "the host sees the partner's character and may start")
+    check(True, "the partner pressed Ready and the host may start")
     host.click(START)
     for who, page in (("host", host), ("joiner", joiner)):
         try:

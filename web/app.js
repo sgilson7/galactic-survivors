@@ -36,7 +36,7 @@ function message(text) {
 }
 
 function act(name, value) {
-  if (name.startsWith("page.")) return page(name);
+  if (name.startsWith("page.")) return page(name, value);
   const result = JSON.parse(game.act(name, value || ""));
   if (result.error) message(result.error);
   else message("");
@@ -102,15 +102,34 @@ function closeAsk() {
 }
 
 function copy(text) {
-  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => message(say("coop.copied")), () => {});
+  const failed = () => message(say("coop.copy_failed"));
+  if (!navigator.clipboard) return failed();
+  navigator.clipboard.writeText(text).then(() => message(say("coop.copied")), failed);
 }
 
-async function page(name) {
+// The address of this page with a room in its fragment: opening it joins.
+function roomLink(code) {
+  return `${location.origin}${location.pathname}#room=${code}`;
+}
+
+async function page(name, value) {
   if (name === "page.download") return download();
   if (name === "page.load") return load();
+  if (name === "page.copy_code") return copy(value);
+  if (name === "page.copy_link") return copy(roomLink(value));
+  if (name === "page.name") {
+    return ask("coop.name_prompt", value, [
+      [say("coop.name_change"), (text) => {
+        closeAsk();
+        act("coop.name", text);
+      }],
+    ]);
+  }
   const net = await transport();
   if (name === "page.host") {
     net.host();
+  } else if (name === "page.join_code") {
+    if (!net.join(value)) message(say("online.bad_code"));
   } else if (name === "page.join") {
     ask("coop.code_prompt", "", [
       [say("coop.join"), (code) => {
@@ -123,8 +142,8 @@ async function page(name) {
     const invitation = await net.invite();
     message("");
     ask("coop.invite_prompt", invitation, [
-      [say("coop.copied"), (_, area) => copy(invitation) || area.select()],
-      [say("coop.start"), async (_, area) => {
+      [say("coop.copy_invitation"), (_, area) => copy(invitation) || area.select()],
+      [say("coop.connect"), async (_, area) => {
         try {
           await net.accept(area.value);
           closeAsk();
@@ -139,7 +158,7 @@ async function page(name) {
       [say("coop.reply"), async (code) => {
         try {
           const reply = await net.reply(code);
-          ask("coop.invite_prompt", reply, [[say("coop.copied"), () => copy(reply)]]);
+          ask("coop.reply_ready", reply, [[say("coop.copy_reply"), () => copy(reply)]]);
         } catch (e) {
           message(say("online.signal_failed"));
         }
@@ -298,6 +317,13 @@ async function main() {
   render(true);
   document.body.dataset.ready = "true";
   requestAnimationFrame(frame);
+  // a room link: take the room out of the address, then join it (T24)
+  const room = new URLSearchParams(location.hash.slice(1)).get("room");
+  if (room) {
+    history.replaceState(null, "", location.pathname + location.search);
+    act("screen.show", "coop");
+    page("page.join_code", room);
+  }
 }
 
 main();
