@@ -656,5 +656,19 @@
     "find": "                for e in self.effects.iter_mut().filter(|e| same(e) && e.life != e.full) {\n                    e.life = 0;\n                }",
     "replace": "                self.effects.retain(|e| !same(e) || e.life == e.full);",
     "test": "rigs_the_logbook_found_keep_every_rule"
+  },
+  {
+    "name": "the joiner's loadout is sent only on connecting (T23)",
+    "file": "crates/core/src/game.rs",
+    "find": "        let done = self.act_on(name, value);\n        self.share_load();\n        done",
+    "replace": "        self.act_on(name, value)",
+    "test": "gear_and_outfitter_changes_in_the_lobby_reach_the_host"
+  },
+  {
+    "name": "an unchanged loadout is sent on every action (T23)",
+    "file": "crates/core/src/game.rs",
+    "find": "        if self.sent_load.as_ref() == Some(&load) {\n            return;\n        }\n",
+    "replace": "",
+    "test": "an_unchanged_loadout_is_not_sent_again"
   }
 ]

@@ -43,3 +43,4 @@ Answers from the person to the journal's sixth tab, 15 October 2026:
 | T20 | "after x full rotations of an orb, it can leave a field again, i leave x up to you based on gameplay feel" | One turn (`orbit_turns`); a tether, every two seconds (R4.5). | 0242533 | done |
 | T21 | "yes build the logbook, keep it locally, publish a scoped down one to the repo" | `rig-log/` stays local; `tests/rig-log/` holds the summary (R4.8). | 0242533 | done |
 | T22 | "yes do the shuffled order for 5 and 6 token rigs. do 1 hour of both" | Five and six tokens are logged in a fixed shuffled order; an hour of each was run (R4.11). | pending | done |
+| T23 | "4. yes" (fix the co-op gear bug first, on its own) | Gear and Outfitter changes made in the lobby now reach the run (R4.12). | pending | done |

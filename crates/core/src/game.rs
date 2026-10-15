@@ -119,6 +119,8 @@ pub struct Game {
     pub room: String,
     pub hosting: bool,
     pub peer_load: Option<Loadout>,
+    /// The loadout last sent to the partner, so a change is sent once (T23).
+    sent_load: Option<Loadout>,
     pub net_error: String,
     pub build: String,
     pub view_w: i32,
@@ -176,6 +178,7 @@ impl Game {
             room: String::new(),
             hosting: false,
             peer_load: None,
+            sent_load: None,
             net_error: String::new(),
             build: build.to_string(),
             view_w: 1280,
@@ -554,12 +557,9 @@ impl Game {
             .unwrap_or(false);
         let Some(n) = self.session.as_mut() else { return };
         n.message(peer, text, self.now_us);
-        let now_lobby = n.status == online::LOBBY;
-        if now_lobby && !was_lobby && n.seat == 1 {
-            let load = self.my_load();
-            if let Some(n) = self.session.as_mut() {
-                n.send_load(&load);
-            }
+        if n.status == online::LOBBY && !was_lobby {
+            self.sent_load = None;
+            self.share_load();
         }
         let events = self.session.as_mut().map(|n| n.take_events()).unwrap_or_default();
         for e in events {
@@ -615,8 +615,36 @@ impl Game {
         self.text.get(key)
     }
 
+    /// The joiner sends their loadout whenever it differs from the one the
+    /// host last heard: a character, gear or Outfitter change on any screen
+    /// reaches the run (T23).
+    fn share_load(&mut self) {
+        let lobby = self
+            .session
+            .as_ref()
+            .map(|n| n.seat == 1 && n.status == online::LOBBY && !n.running)
+            .unwrap_or(false);
+        if !lobby {
+            return;
+        }
+        let load = self.my_load();
+        if self.sent_load.as_ref() == Some(&load) {
+            return;
+        }
+        if let Some(n) = self.session.as_mut() {
+            n.send_load(&load);
+        }
+        self.sent_load = Some(load);
+    }
+
     pub fn act(&mut self, name: &str, value: &str) -> Result<(), String> {
         self.notice.clear();
+        let done = self.act_on(name, value);
+        self.share_load();
+        done
+    }
+
+    fn act_on(&mut self, name: &str, value: &str) -> Result<(), String> {
         match name {
             "screen.show" => {
                 let s = Screen::from(value).ok_or_else(|| format!("There is no screen \"{value}\"."))?;
@@ -637,17 +665,6 @@ impl Game {
                     return Err(self.refusal("hangar.locked"));
                 }
                 self.save.character = value.to_string();
-                if self
-                    .session
-                    .as_ref()
-                    .map(|n| n.seat == 1 && n.status == online::LOBBY)
-                    .unwrap_or(false)
-                {
-                    let load = self.my_load();
-                    if let Some(n) = self.session.as_mut() {
-                        n.send_load(&load);
-                    }
-                }
             }
             "hangar.buy" => self
                 .save
@@ -885,6 +902,52 @@ pub mod tests {
             let status = g.session.as_ref().unwrap().status;
             assert!(status == online::PLAYING, "{status}");
         }
+    }
+
+    /// A host and a joiner, connected and in the lobby.
+    fn lobby() -> (Game, Game) {
+        let mut host = game();
+        let mut join = game();
+        host.host(7, "gs");
+        join.join("ABCDE", "gs").unwrap();
+        host.net_peer(2);
+        join.net_peer(1);
+        wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        (host, join)
+    }
+
+    #[test]
+    fn gear_and_outfitter_changes_in_the_lobby_reach_the_host() {
+        let (mut host, mut join) = lobby();
+        let before = host.peer_load.clone().expect("the joiner's first loadout").stats;
+        // plating_rank: max_hp +10 a rank, 120 gold for the first
+        join.save.gold = 120;
+        join.act("shop.buy", "plating_rank").unwrap();
+        // kinetic_core: damage_pct +3 at rank one, worn in the core slot
+        join.save.modules.push(crate::meta::Piece {
+            uid: 99,
+            id: "kinetic_core".into(),
+            rank: 1,
+        });
+        join.act("screen.show", "gear").unwrap();
+        join.act("gear.equip", "99").unwrap();
+        wire(&mut host, &mut join);
+        let after = host.peer_load.clone().unwrap().stats;
+        assert_eq!(after.max_hp, before.max_hp + 10, "the Outfitter rank arrived");
+        assert_eq!(after.damage_pct, before.damage_pct + 3, "the worn module arrived");
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        let w = join.world.as_ref().unwrap();
+        assert_eq!(w.players[1].load.stats.damage_pct, before.damage_pct + 3, "and the run has it");
+    }
+
+    #[test]
+    fn an_unchanged_loadout_is_not_sent_again() {
+        let (_host, mut join) = lobby();
+        join.act("screen.show", "gear").unwrap();
+        join.act("screen.show", "coop").unwrap();
+        assert!(join.net_outbox().is_empty(), "nothing changed, nothing sent");
     }
 
     /// Two co-op games whose messages take `lag` frames, losing every
