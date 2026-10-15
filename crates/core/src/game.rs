@@ -1126,6 +1126,41 @@ pub mod tests {
         assert!(host.act("run.start", "").is_ok(), "solo play is open again");
     }
 
+    /// Every way out of co-op keeps what the run paid (the save lives in
+    /// the page until it is downloaded; nothing here clears it).
+    #[test]
+    fn leaving_co_op_keeps_your_progress() {
+        let runs = |g: &Game| g.save.stats.get("coop_runs").copied().unwrap_or(0);
+        // quitting mid-run, and the partner who sees them go
+        let (mut host, mut join) = lobby();
+        host.save.gold = 500;
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        for f in 0..300i64 {
+            host.advance(f * 16_667, Raw::default());
+            join.advance(f * 16_667, Raw::default());
+            wire(&mut host, &mut join);
+        }
+        join.act("run.quit", "").unwrap();
+        wire(&mut host, &mut join);
+        host.advance(301 * 16_667, Raw::default());
+        for (who, g) in [("the one who quit", &join), ("the one left behind", &host)] {
+            assert_eq!(g.screen, Screen::Results, "{who}");
+            assert_eq!(runs(g), 1, "{who}: the run counted");
+            let paid = g.payout.as_ref().expect("a payout").gold;
+            assert!(g.save.gold >= paid, "{who}: the gold reached the save");
+        }
+        assert!(host.save.gold >= 500, "gold held before the run stays");
+        // leaving from the lobby touches nothing in the save
+        let before = host.save.clone();
+        host.act("screen.show", "coop").unwrap();
+        host.act("coop.leave", "").unwrap();
+        host.net_outbox();
+        assert_eq!(host.save, before);
+    }
+
     #[test]
     fn solo_play_waits_until_you_leave_the_room() {
         let (mut host, _join) = lobby();

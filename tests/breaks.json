@@ -761,5 +761,19 @@
     "find": "                let crowded = first.len() > 1 && !seen.contains(&format!(\"hit:{}\", row[at]));",
     "replace": "                let crowded = first.len() > 1;",
     "test": "a_payload_that_hit_but_left_no_field_fails_even_beside_another"
+  },
+  {
+    "name": "quitting co-op drops the run's payout",
+    "file": "crates/core/src/game.rs",
+    "find": "                    if self.coop_running() {\n                        self.leave_coop();\n                    }\n                    self.end_run();",
+    "replace": "                    if self.coop_running() {\n                        self.leave_coop();\n                        self.world = None;\n                        self.screen = Screen::Results;\n                        return Ok(());\n                    }\n                    self.end_run();",
+    "test": "leaving_co_op_keeps_your_progress"
+  },
+  {
+    "name": "a partner who leaves does not end the run for the other",
+    "file": "crates/core/src/game.rs",
+    "find": "        if over || lost_partner {",
+    "replace": "        if over {",
+    "test": "leaving_co_op_keeps_your_progress"
   }
 ]
