@@ -68,6 +68,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | Rig logbook from ef7a6bb: an hour each of shuffled five- and six-token rigs, then a refresh of one to four | 21,526,125 five (4.41%), 14,631,621 six (0.05%), 8,772,732 four refreshed with no behaviour changed; 18 failed: 17 a crowded Boomerang Disc, now noted (R4.19), and 1 over the effects ceiling, a question for the person (R4.20) |
 | `tests/browser/lobby.py` (new), Chromium | 12 checks passed: Ready gates Start, the partner's row, names, the phone layout, Copy code and Copy link, a room link |
 | `python3 scripts/break_tests.py T23 T24 "tethers replace"`, after the co-op lobby | 15 of 15 caught; two older rows had rotted (R4.17) and were re-aimed |
+| `python3 scripts/break_tests.py`, every row, after the merge (cd19c2a) | 109 of 109 planted defects caught |
 | `./scripts/check.sh`, after round 4 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026, in 1 min 44 s |
 | `./scripts/count-tests.sh`, after round 4 | 178 passed, 0 failed, 2 ignored (the probe and the rig sweep) |
 | `python3 scripts/break_tests.py`, after round 4 | 87 of 87 planted defects caught |
