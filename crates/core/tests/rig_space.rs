@@ -490,7 +490,16 @@ fn commit() -> String {
             .unwrap_or_default()
     };
     let head = git(&["rev-parse", "--short", "HEAD"]);
-    let dirty = !git(&["status", "--porcelain", "--untracked-files=no"]).is_empty();
+    // the logbook's own summary does not count as a change
+    let dirty = !git(&[
+        "status",
+        "--porcelain",
+        "--untracked-files=no",
+        "--",
+        ".",
+        ":!tests/rig-log",
+    ])
+    .is_empty();
     format!(
         "{}{}",
         if head.is_empty() { "unknown" } else { &head },
