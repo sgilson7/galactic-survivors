@@ -125,6 +125,18 @@ At 8,200 a second: all of length 5 takes 16.5 hours, all of length 6 37 days, an
 
 From commit 0242533, `RIG_BUDGET_S=7200`: every rig of one to four tokens at level 1, 8,926,258 in all, in 1,544 s (25.7 minutes, about 5,800 a second with writing the log). No rule broken; 164 rigs noted, all a field after Wormhole that never landed. The local log `rig-log/` is 1.5 GB; the repository's `tests/rig-log/` is 204 KB (2,446 block lines, 164 notable rigs).
 
+## The shuffled hours of five and six tokens (15 October 2026, T22)
+
+From commit ef7a6bb, level 1, 12 threads, one after another:
+
+| Run | Rigs played | Time | Rate | Share of the length |
+| --- | --- | --- | --- | --- |
+| Five tokens, shuffled | 21,526,125 | 3,600 s | about 5,980 a second | 4.41% of 487,914,705 |
+| Six tokens, shuffled | 14,631,621 | 3,600 s | about 4,060 a second | 0.05% of 26,484,087,078 |
+| Four tokens, refreshed (stale after the rules moved to their own file) | 8,772,732 | 1,665 s | about 5,270 a second, while another build ran | 100% |
+
+The refresh changed no rig's behaviour. Five tokens failed 7 rigs and six failed 11: 17 were a Boomerang Disc whose path another payload in its firing had cleared (R4.19, now a note), and one held more than 1,024 effects (R4.20). The local `rig-log/` is now 8.5 GB, almost all of it the five- and six-token lines; the repository's `tests/rig-log/` is 396 KB.
+
 ## Not measured
 
 - Frame rate on a phone or an older laptop with many enemies on screen.
