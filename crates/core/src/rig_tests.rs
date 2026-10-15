@@ -201,6 +201,129 @@ fn a_wormhole_shot_passes_the_enemy_it_came_out_of() {
     );
 }
 
+/// The tethers still running (a replaced one ends on the next update).
+fn tethers(w: &World) -> Vec<&crate::world::Effect> {
+    w.effects
+        .iter()
+        .filter(|e| e.kind == EffectKind::Tether && e.life > 0)
+        .collect()
+}
+
+#[test]
+fn each_copy_of_a_formation_on_tether_keeps_its_own_line() {
+    let c = quiet();
+    for (form, copies) in [("twin", 2), ("fan", 3), ("ring", 6)] {
+        let mut w = solo(&c);
+        rig(&c, &mut w, &[form, "tether"]);
+        w.fire_rigs(&c);
+        w.update_effects(&c);
+        let t = tethers(&w);
+        assert_eq!(t.len(), copies, "{form}");
+        // nothing placed: each copy reaches out its own way
+        let mut ends: Vec<V> = t.iter().map(|e| e.points[1]).collect();
+        ends.dedup();
+        assert_eq!(ends.len(), copies, "{form}: every line ends somewhere else");
+        // firing again replaces the set, it does not add to it
+        w.players[0].rigs[0].cd = 0;
+        w.fire_rigs(&c);
+        assert_eq!(tethers(&w).len(), copies, "{form} fired twice");
+    }
+    // a lone tether with nothing to join still draws no line
+    let mut w = solo(&c);
+    rig(&c, &mut w, &["tether"]);
+    w.fire_rigs(&c);
+    w.update_effects(&c);
+    assert!(tethers(&w)[0].points.is_empty());
+}
+
+#[test]
+fn twin_tethers_join_the_farthest_placed_thing_and_the_next() {
+    let c = quiet();
+    let mut w = solo(&c);
+    rig(&c, &mut w, &["twin", "tether"]);
+    w.fire_rigs(&c);
+    // two things the player placed, 300 and 150 px away
+    let mut far = w.effects[0].clone();
+    far.kind = EffectKind::Well;
+    far.pos = V::new(px(300), 0);
+    far.life = 1_000;
+    let mut near = far.clone();
+    near.pos = V::new(0, px(150));
+    w.effects.push(far);
+    w.effects.push(near);
+    w.update_effects(&c);
+    let mut ends: Vec<V> = tethers(&w).iter().map(|e| e.points[1]).collect();
+    ends.sort_by_key(|v| (v.x, v.y));
+    assert_eq!(ends, vec![V::new(0, px(150)), V::new(px(300), 0)]);
+}
+
+/// How many ground fields were laid in `n` ticks, clearing them as they
+/// come so none merge.
+fn fields_laid(c: &Content, w: &mut World, n: i32) -> i32 {
+    let mut k = 0;
+    for _ in 0..n {
+        w.tick += 1;
+        w.update_effects(c);
+        k += w.fields.len() as i32;
+        w.fields.clear();
+    }
+    k
+}
+
+#[test]
+fn an_orbiting_body_leaves_a_field_then_waits_a_full_turn() {
+    // Halo Guard: six bodies 115 px out, a body passing a post every sixth
+    // of a turn (about 12 ticks of 70). Three posts on the ring, unevenly
+    // spaced. An orbit hits one enemy at most every 500 ms (30 ticks), so a
+    // post is hit every third pass, about 35 ticks: over four turns, 8 hits
+    // a post, 24 fields without a wait. Waiting four turns, each body leaves
+    // its first field and at most one more: 6 to 12.
+    let run = |turns: i32| {
+        let mut c = quiet();
+        c.fields.orbit_turns = turns;
+        let mut w = solo(&c);
+        // uneven, so no two bodies reach posts on the same tick
+        for deg in [10, 110, 240] {
+            let at = crate::geom::from_angle(crate::fx::TURN * deg / 360, px(115));
+            post(&c, &mut w, at.x / crate::geom::SUB, at.y / crate::geom::SUB);
+        }
+        rig(&c, &mut w, &["ignite", "halo_guard"]);
+        w.fire_rigs(&c);
+        w.players[0].rigs[0].cd = 1_000_000;
+        // four whole turns at the orbit's own spin
+        let spin = w
+            .effects
+            .iter()
+            .find(|e| e.kind == EffectKind::Orbit)
+            .unwrap()
+            .spin;
+        fields_laid(&c, &mut w, 4 * crate::fx::TURN / spin)
+    };
+    let free = run(0);
+    let waits = run(4);
+    assert!(free >= 20, "about 24 without a wait: {free}");
+    assert!(
+        (6..=12).contains(&waits),
+        "a first field and at most one more a body: {waits}"
+    );
+}
+
+#[test]
+fn a_tether_leaves_a_field_where_it_cuts_at_most_every_two_seconds() {
+    let c = quiet();
+    let mut w = solo(&c);
+    post(&c, &mut w, 150, 0);
+    w.players[0].facing = V::new(px(1), 0);
+    rig(&c, &mut w, &["ignite", "behind", "tether"]);
+    w.players[0].facing = V::new(-px(1), 0);
+    w.fire_rigs(&c);
+    w.players[0].rigs[0].cd = 1_000_000;
+    // Behind aims away from facing left: the line reaches right, through the
+    // post. It cuts every 200 ms for 4 s; a field at most every 2 s: ticks
+    // 1 and 121, and none at 241 since the line is gone.
+    assert_eq!(fields_laid(&c, &mut w, 240), 2);
+}
+
 #[test]
 fn the_first_payload_sets_the_recharge_not_the_slowest() {
     let c = quiet();

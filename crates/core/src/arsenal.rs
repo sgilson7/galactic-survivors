@@ -514,16 +514,31 @@ impl World {
                 true
             }
             Kind::Tether => {
-                // one line per player and ability; a new one replaces it
-                self.effects
-                    .retain(|e| !(e.kind == EffectKind::Tether && e.seat == seat && e.ability == id));
+                // one set of lines per player and ability: a new firing
+                // replaces the old one, but the copies of one firing (a
+                // formation's, all made this tick, so still at full life)
+                // each keep their own line (the person's answer, R4.4)
+                // The old ones are ended, not removed: a trigger can fire a
+                // tether while the effects are being walked (T18).
+                let same = |e: &Effect| e.kind == EffectKind::Tether && e.seat == seat && e.ability == id;
+                for e in self.effects.iter_mut().filter(|e| same(e) && e.life != e.full) {
+                    e.life = 0;
+                }
+                let index = self
+                    .effects
+                    .iter()
+                    .filter(|e| same(e) && e.life == e.full)
+                    .count() as i32;
                 self.add_effect(
                     content,
                     Effect {
                         kind: EffectKind::Tether,
                         every: s.every.max(1),
                         width: s.width,
-                        ..self.effect_base(seat, id, pos, V::ZERO, s)
+                        count: index,
+                        // a copy with nothing to join reaches out its own way
+                        armed: dir.is_some(),
+                        ..self.effect_base(seat, id, pos, dir.unwrap_or(V::ZERO), s)
                     },
                 );
                 true
@@ -618,6 +633,7 @@ impl World {
             anchored: false,
             carry: None,
             field: s.field,
+            marks: Vec::new(),
             burst_pct: s.burst_pct,
             pull: s.pull,
             slow_pct: s.slow_pct,
@@ -779,16 +795,22 @@ impl World {
 
     /// The far end of a tether: the partner, or the farthest thing this
     /// player has placed within reach.
+    /// Where a tether's line ends: the partner first, then what the player
+    /// placed, farthest first. Copy k of a formation takes the k-th; a copy
+    /// left over reaches out in its own direction.
     fn tether_end(&self, e: &Effect) -> Option<V> {
         let me = self.players.get(e.seat)?;
+        let mut ends = Vec::new();
         if let Some(q) = self.players.iter().find(|q| q.seat != e.seat && q.alive) {
             if within(q.pos, me.pos, px(e.shot_range.max(200) * 2)) {
-                return Some(q.pos);
+                ends.push(q.pos);
             }
         }
-        self.effects
+        let mut placed: Vec<(i64, usize)> = self
+            .effects
             .iter()
-            .filter(|x| {
+            .enumerate()
+            .filter(|(_, x)| {
                 x.seat == e.seat
                     && matches!(
                         x.kind,
@@ -796,8 +818,17 @@ impl World {
                     )
                     && within(x.pos, me.pos, px(e.shot_range.max(200)))
             })
-            .max_by_key(|x| dist2(x.pos, me.pos))
-            .map(|x| x.pos)
+            .map(|(i, x)| (dist2(x.pos, me.pos), i))
+            .collect();
+        placed.sort_by_key(|(d, i)| (std::cmp::Reverse(*d), std::cmp::Reverse(*i)));
+        ends.extend(placed.into_iter().map(|(_, i)| self.effects[i].pos));
+        match ends.get(e.count.max(0) as usize) {
+            Some(end) => Some(*end),
+            None if e.armed && e.dir != V::ZERO => {
+                Some(me.pos.add(e.dir.with_len(px(e.shot_range.max(200)))))
+            }
+            None => None,
+        }
     }
 
     pub fn update_effects(&mut self, content: &Content) {
@@ -868,8 +899,16 @@ impl World {
                                 })
                                 .map(|(i, _)| i)
                                 .collect();
+                            let gap = ticks(content.fields.tether_ms);
                             for i in hit {
                                 let at = self.foes[i].pos;
+                                if let Some(fk) = e.field {
+                                    let last = e.marks.first().copied().flatten();
+                                    if last.map(|t| now as i32 - t >= gap).unwrap_or(true) {
+                                        e.marks = vec![Some(now as i32)];
+                                        self.add_field(content, fk, at, 30, e.damage, e.seat);
+                                    }
+                                }
                                 let killed = self.hurt_foe(content, i, e.damage, e.seat, &e.ability, V::ZERO);
                                 self.spring_carry(content, e.seat, &mut e.carry, On::Hit, at);
                                 if killed {
@@ -977,15 +1016,28 @@ impl World {
                             if f.hp > 0
                                 && within(f.pos, at, px(e.radius + r))
                                 && !e.hits.iter().any(|(id, _)| *id == f.id)
-                                && !struck.iter().any(|(id, _, _)| *id == f.id)
+                                && !struck.iter().any(|(id, _, _, _)| *id == f.id)
                             {
-                                struck.push((f.id, i, f.pos.sub(e.pos)));
+                                struck.push((f.id, i, f.pos.sub(e.pos), b));
                             }
                         }
                     }
-                    for (id, i, away) in struck {
+                    let turns = content.fields.orbit_turns.max(0) * turn;
+                    for (id, i, away, b) in struck {
                         e.hits.push((id, now + ticks(500) as u32));
                         let at = self.foes[i].pos;
+                        // each body leaves a field, then not again until it
+                        // has gone round `orbit_turns` times (R4.5)
+                        if let Some(fk) = e.field {
+                            let b = b as usize;
+                            if e.marks.len() <= b {
+                                e.marks.resize(b + 1, None);
+                            }
+                            if e.marks[b].map(|a| e.angle - a >= turns).unwrap_or(true) {
+                                e.marks[b] = Some(e.angle);
+                                self.add_field(content, fk, at, 30, e.damage, e.seat);
+                            }
+                        }
                         let killed = self.hurt_foe(
                             content,
                             i,

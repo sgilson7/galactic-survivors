@@ -292,6 +292,11 @@ pub struct FieldRules {
     /// Charge meeting slick or frost: each enemy in it is struck for this
     /// percent of the charge's damage.
     pub conduct_pct: i32,
+    /// An orbiting body leaves a field where it hits, then not again until
+    /// it has gone this many full turns (the person's answer, R4.5).
+    pub orbit_turns: i32,
+    /// A tether leaves a field where it cuts at most this often.
+    pub tether_ms: i32,
 }
 
 /// Runes drawn by walking (T14).

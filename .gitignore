@@ -7,3 +7,5 @@ __pycache__/
 # The design discussion is a private recording between two people; it
 # stays on this machine (SECOND-ORDER.md R1.24).
 /notes/
+# The full rig logbook (T18) stays on this machine; tests/rig-log/ is its summary.
+/rig-log/

@@ -409,7 +409,7 @@
     "sweep_cannon": "A beam from orbit traces a circle around you, one strike after another, and leaves a ring of fire.",
     "wake_mine": "Drops a mine behind you while you move. It goes off when an enemy steps close.",
     "gravity_well": "Opens a pit at the thickest crowd. It pulls enemies in and hurts them while it lasts.",
-    "tether": "A line joins you to your partner, or to the farthest thing you placed. Enemies that cross it are cut.",
+    "tether": "A line joins you to your partner, or to the farthest thing you placed. Enemies that cross it are cut. Under a formation, each copy joins the next farthest thing, or reaches out on its own.",
     "boomerang_disc": "Throws a disc that passes through enemies, stops, and flies back to you.",
     "seed_pod": "Plants a pod that grows into a small gun, then shoots the nearest enemy until it wilts.",
     "momentum": "{n}% more damage for each second you keep moving, for up to four seconds.",

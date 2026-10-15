@@ -68,7 +68,7 @@ Parts and abilities held but not in a rig. They do nothing until moved into a so
 
 ### Ground field
 
-A patch of fire, frost, charge or slick that some payloads leave where they land. Fields hurt or slow enemies standing in them, and two kinds that meet react.
+A patch of fire, frost, charge or slick that some payloads leave where they land. Fields hurt or slow enemies standing in them, and two kinds that meet react. An orbiting body or a tether leaves one where it hits, then waits before it leaves another.
 
 ### Rune
 

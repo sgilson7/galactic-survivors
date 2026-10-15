@@ -418,7 +418,9 @@
     "slick": {"ms": 5000, "radius": 70, "max_radius": 130, "tick_ms": 200, "slow_pct": 20},
     "steam": {"ms": 2500, "radius": 80, "max_radius": 140, "tick_ms": 200, "slow_pct": 70},
     "flare_pct": 300,
-    "conduct_pct": 100
+    "conduct_pct": 100,
+    "orbit_turns": 1,
+    "tether_ms": 2000
   },
   "runes": {"sample_px": 24, "max_points": 160, "min_points": 10, "min_area": 9000, "corner_cos": 500, "ms": 20000, "stacks": 3, "damage": 30, "circle_armor": 1, "triangle_damage_pct": 6, "square_area_pct": 6}
 }

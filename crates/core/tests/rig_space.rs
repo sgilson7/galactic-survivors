@@ -29,8 +29,8 @@
 //!   world;
 //! * rollback: a copy taken halfway and played on ends in the same world;
 //! * field: a payload that fired after a field modifier left that field
-//!   somewhere in the scene (or reacted with another field); orbits and
-//!   tethers never land and are left out, and so is a mine still waiting;
+//!   somewhere in the scene (or reacted with another field); a tether is
+//!   left out (alone it joins nothing), and so is a mine still waiting;
 //!   after a Wormhole a miss is only noted, since the payload may hit nothing;
 //! * formation: on the first tick, a payload after a formation makes the
 //!   formation's copies times what it makes alone.
@@ -99,6 +99,19 @@ fn rig_at(t: &Tokens, len: usize, mut i: u64) -> Option<Vec<usize>> {
         return None;
     }
     Some(row)
+}
+
+/// How many realistic rigs of `len` tokens there are: k payloads, all
+/// different, in any k of the places, and parts in the rest.
+fn space(t: &Tokens, len: usize) -> u64 {
+    let (p, q) = (t.payloads as u64, (t.all.len() - t.payloads) as u64);
+    (1..=len as u64)
+        .map(|k| {
+            let choose = (0..k).fold(1u64, |a, i| a * (len as u64 - i) / (i + 1));
+            let perm = (0..k).fold(1u64, |a, i| a * (p - i));
+            choose * perm * q.pow((len as u64 - k) as u32)
+        })
+        .sum()
 }
 
 fn rows(t: &Tokens, len: usize) -> u64 {
@@ -345,13 +358,6 @@ fn formation(c: &Content, row: &[String], level: i32) -> Result<(), String> {
     else {
         return Ok(());
     };
-    // a player has one tether an ability: each copy replaces the last
-    if c.ability(&row[i])
-        .map(|a| a.kind == Kind::Tether)
-        .unwrap_or(false)
-    {
-        return Ok(());
-    }
     let bare: Vec<String> = row
         .iter()
         .enumerate()
@@ -372,16 +378,45 @@ fn formation(c: &Content, row: &[String], level: i32) -> Result<(), String> {
     Ok(())
 }
 
-fn check(c: &Content, t: &Tokens, row: &[usize], level: i32, deep: bool, tally: &mut Tally) {
-    let row: Vec<String> = row.iter().map(|k| t.all[*k].clone()).collect();
-    let name = row.join(" ");
-    tally.played += 1;
-    let mut local = Tally::default();
+/// What one rig did in the scene, and which rules it broke.
+#[derive(Default, Clone)]
+struct Played {
+    failures: Vec<String>,
+    notes: Vec<String>,
+    fired: i32,
+    /// Damage done to the six enemies that do not die.
+    dealt: i64,
+    kills: u32,
+    /// The payloads seen, and the fields left, in the order first seen.
+    payloads: Vec<String>,
+    fields: Vec<String>,
+    reactions: u32,
+    depth: u32,
+    /// A fingerprint of the world at the end.
+    print: u64,
+    most_shots: usize,
+    most_effects: usize,
+    most_echoes: usize,
+}
+
+fn fnv(h: u64, bytes: &[u8]) -> u64 {
+    let mut h = h;
+    for b in bytes {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+const FNV: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// Plays one rig and judges it against every rule.
+fn judge(c: &Content, row: &[String], level: i32, deep: bool) -> Played {
     let run = catch_unwind(AssertUnwindSafe(
         || -> Result<(Vec<i64>, World, Vec<String>, Tally), String> {
             let mut lt = Tally::default();
-            formation(c, &row, level)?;
-            let mut w = scene(c, &row, level, false);
+            formation(c, row, level)?;
+            let mut w = scene(c, row, level, false);
             let mut seen = Vec::new();
             play(c, &mut w, 0, SCENE_TICKS / 2, &mut seen, &mut lt)?;
             let half = w.clone();
@@ -401,7 +436,7 @@ fn check(c: &Content, t: &Tokens, row: &[usize], level: i32, deep: bool, tally: 
                 if print(&again) != end {
                     return Err("rollback: a copy taken halfway ends in a different world".into());
                 }
-                let mut g = scene(c, &row, level, true);
+                let mut g = scene(c, row, level, true);
                 play(c, &mut g, 0, SCENE_TICKS, &mut Vec::new(), &mut Tally::default())?;
                 if print(&g) != end {
                     return Err("gap: an empty socket in the middle changes the world".into());
@@ -410,67 +445,62 @@ fn check(c: &Content, t: &Tokens, row: &[usize], level: i32, deep: bool, tally: 
             Ok((end, w, seen, lt))
         },
     ));
-    let (w, seen) = match run {
+    let mut out = Played::default();
+    let (end, w, seen) = match run {
         Err(e) => {
             let why = e
                 .downcast_ref::<String>()
                 .cloned()
                 .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
                 .unwrap_or_default();
-            tally.failures.push(format!("panic: [{name}] L{level}: {why}"));
-            return;
+            out.failures.push(format!("panic: {why}"));
+            return out;
         }
         Ok(Err(why)) => {
-            tally.failures.push(format!("[{name}] L{level}: {why}"));
-            return;
+            out.failures.push(why);
+            return out;
         }
-        Ok(Ok((_, w, seen, lt))) => {
-            local.add(lt);
-            (w, seen)
+        Ok(Ok((end, w, seen, lt))) => {
+            out.most_shots = lt.most_shots;
+            out.most_effects = lt.most_effects;
+            out.most_echoes = lt.most_echoes;
+            (end, w, seen)
         }
     };
     let p = &w.players[0];
     let fired = p.rigs[0].fired as i32;
-    if let Some(cd) = expected_recharge(c, &row, level) {
+    if let Some(cd) = expected_recharge(c, row, level) {
         let most = (SCENE_TICKS as i32 + cd - 1) / cd;
         if fired != most {
-            tally.failures.push(format!(
-                "recharge: [{name}] L{level}: fired {fired} times; a recharge of {cd} ticks fires {most}"
+            out.failures.push(format!(
+                "recharge: fired {fired} times; a recharge of {cd} ticks fires {most}"
             ));
         }
     } else if fired > 0 {
-        tally.failures.push(format!(
-            "recharge: [{name}] L{level}: fired {fired} times with no payload before its first trigger"
+        out.failures.push(format!(
+            "recharge: fired {fired} times with no payload before its first trigger"
         ));
     }
     if p.record.deepest_trigger > 3 {
-        tally
-            .failures
-            .push(format!("depth: [{name}] L{level}: {}", p.record.deepest_trigger));
+        out.failures.push(format!("depth: {}", p.record.deepest_trigger));
     }
     if let Some(s) = seen
         .iter()
         .find(|s| *s != "rune" && !s.starts_with("field:") && !row.contains(s))
     {
-        tally
-            .failures
-            .push(format!("stray: [{name}] L{level}: a {s} that is not in the rig"));
+        out.failures.push(format!("stray: a {s} that is not in the rig"));
     }
     // the field rule: the last field modifier before the first payload
-    // leaves its field, or reacted with another. Orbits and tethers
-    // never land, so they leave none (SECOND-ORDER R4.5, the person's call).
-    let first = on_recharge(c, &row);
-    let lands = |id: &str| {
-        c.ability(id)
-            .map(|a| !matches!(a.kind, Kind::Orbit | Kind::Tether))
-            .unwrap_or(false)
-    };
-    if let Some(p) = first
+    // leaves its field, or reacted with another. A lone tether in a solo
+    // scene joins nothing and so cuts nothing.
+    let first = on_recharge(c, row);
+    let lands = |id: &str| c.ability(id).map(|a| a.kind != Kind::Tether).unwrap_or(false);
+    if let Some(at) = first
         .first()
         .filter(|p| lands(p))
         .and_then(|p| row.iter().position(|id| id == p))
     {
-        if let Some(kind) = row[..p]
+        if let Some(kind) = row[..at]
             .iter()
             .rev()
             .find_map(|id| c.part(id).filter(|q| !q.field.is_empty()))
@@ -480,35 +510,69 @@ fn check(c: &Content, t: &Tokens, row: &[usize], level: i32, deep: bool, tally: 
             let waiting = w
                 .effects
                 .iter()
-                .any(|e| e.seat == 0 && e.ability == row[p] && e.kind == EffectKind::Bomb);
-            if seen.contains(&row[p])
+                .any(|e| e.seat == 0 && e.ability == row[at] && e.kind == EffectKind::Bomb);
+            if seen.contains(&row[at])
                 && !waiting
                 && !seen.contains(&want)
                 && !seen.iter().any(|s| s == "field:steam")
-                && w.players[0].record.reactions == 0
+                && p.record.reactions == 0
             {
-                let why = format!(
-                    "field: [{name}] L{level}: {} left no {} field",
-                    row[p], kind.field
-                );
+                let why = format!("field: {} left no {} field", row[at], kind.field);
                 // out of a wormhole a payload flies at the player and may hit
                 // nothing, and nothing hit is nothing landed on
-                if row[..p].iter().any(|id| id == "wormhole") {
-                    local.notes.push(why);
+                if row[..at].iter().any(|id| id == "wormhole") {
+                    out.notes.push(why);
                 } else {
-                    tally.failures.push(why);
+                    out.failures.push(why);
                 }
             }
         }
     }
     for id in first {
         if !seen.contains(&id) {
-            local.notes.push(format!("never fired: [{name}] L{level}: {id}"));
-            *local.never_fired.entry(id).or_default() += 1;
+            out.notes.push(format!("never fired: {id}"));
         }
     }
-    local.played = 0;
-    tally.add(local);
+    out.fired = fired;
+    out.dealt = w
+        .foes
+        .iter()
+        .filter(|f| f.max_hp == 100_000)
+        .map(|f| (f.max_hp - f.hp) as i64)
+        .sum();
+    out.kills = p.record.kills;
+    out.payloads = seen
+        .iter()
+        .filter(|s| !s.starts_with("field:"))
+        .cloned()
+        .collect();
+    out.fields = seen
+        .iter()
+        .filter_map(|s| s.strip_prefix("field:").map(|f| f.to_string()))
+        .collect();
+    out.reactions = p.record.reactions;
+    out.depth = p.record.deepest_trigger;
+    out.print = end.iter().fold(FNV, |h, v| fnv(h, &v.to_le_bytes()));
+    out
+}
+
+fn check(c: &Content, t: &Tokens, row: &[usize], level: i32, deep: bool, tally: &mut Tally) {
+    let row: Vec<String> = row.iter().map(|k| t.all[*k].clone()).collect();
+    let name = row.join(" ");
+    tally.played += 1;
+    let p = judge(c, &row, level, deep);
+    for f in p.failures {
+        tally.failures.push(format!("[{name}] L{level}: {f}"));
+    }
+    for n in p.notes {
+        if let Some(id) = n.strip_prefix("never fired: ") {
+            *tally.never_fired.entry(id.to_string()).or_default() += 1;
+        }
+        tally.notes.push(format!("[{name}] L{level}: {n}"));
+    }
+    tally.most_shots = tally.most_shots.max(p.most_shots);
+    tally.most_effects = tally.most_effects.max(p.most_effects);
+    tally.most_echoes = tally.most_echoes.max(p.most_echoes);
 }
 
 fn run_all(c: &Content, t: &Tokens, rigs: &[Vec<usize>], level: i32, deep_every: usize) -> Tally {
@@ -592,12 +656,39 @@ fn every_short_rig_and_a_sample_of_long_ones_keep_every_rule() {
     let mut all = one;
     all.add(five);
     assert_eq!(short, 29 + 2378, "the space counted in MEASUREMENTS.md");
+    assert_eq!(space(&t, 2), 2378);
+    assert_eq!(space(&t, 4), 8_772_732);
     assert!(
         all.failures.is_empty(),
         "{} rigs broke a rule:\n{}",
         all.failures.len(),
         all.failures.join("\n")
     );
+}
+
+/// Rigs the logbook found breaking a rule, kept here once fixed.
+const FOUND: &[(&str, i32)] = &[
+    // a tether fired by a hit during the effects update removed the old
+    // tether from the list being walked: a panic (T18)
+    ("orbital_lance on_hit tether", 1),
+];
+
+#[test]
+fn rigs_the_logbook_found_keep_every_rule() {
+    let c = quiet();
+    quiet_hook();
+    let bad: Vec<String> = FOUND
+        .iter()
+        .flat_map(|(rig, level)| {
+            let row: Vec<String> = rig.split(' ').map(|s| s.to_string()).collect();
+            judge(&c, &row, *level, true)
+                .failures
+                .into_iter()
+                .map(move |f| format!("[{rig}] L{level}: {f}"))
+        })
+        .collect();
+    let _ = std::panic::take_hook();
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
 /// A larger sweep: RIG_LEN (1-6), RIG_N (a sample; all when unset),
@@ -642,4 +733,502 @@ fn sweep() {
         "{} rigs broke a rule",
         tally.failures.len()
     );
+}
+
+// ---- the logbook (T18) -------------------------------------------------------
+//
+// Everything above this line is the scene and the rules; its text is part of
+// every log line's key, so changing it makes every line stale. Everything
+// below is bookkeeping and may change freely.
+//
+// The full log stays on this computer, in `rig-log/` (not in git): one line
+// for every rig played, in files of 4,096 rig numbers. The repository keeps
+// a summary in `tests/rig-log/`: one line for each file, every rig that
+// failed or was noted, and what changed run by run.
+//
+//   cargo test -p tool_core --test rig_space -- --ignored --nocapture logbook
+//
+// RIG_BUDGET_S (seconds, default 120), RIG_LENGTHS (default 1,2,3,4),
+// RIG_LEVELS (default 1). Each run plays only rigs whose line is missing or
+// stale, shortest rigs first, until the budget is spent.
+
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
+
+const BLOCK: u64 = 4096;
+/// The files a rig's play depends on; a change to any makes every line stale.
+const RULE_FILES: &[&str] = &[
+    "crates/core/src/world.rs",
+    "crates/core/src/arsenal.rs",
+    "crates/core/src/rig.rs",
+    "crates/core/src/field.rs",
+    "crates/core/src/rune.rs",
+    "crates/core/src/geom.rs",
+    "crates/core/src/fx.rs",
+    "crates/core/src/rng.rs",
+    "crates/core/src/content.rs",
+    "crates/core/src/meta.rs",
+];
+const MARK: &str = "// ---- the logbook (T18)";
+
+fn root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// What every line depends on: the rule code, the scene and rules above,
+/// the order of the tokens, and the data that is not an ability or a part.
+/// Each token's own data is keyed separately.
+struct Keys {
+    code: u64,
+    token: Vec<u64>,
+}
+
+fn keys(t: &Tokens) -> Keys {
+    let r = root();
+    let mut code = FNV;
+    for f in RULE_FILES {
+        code = fnv(code, &std::fs::read(r.join(f)).unwrap());
+    }
+    let me = std::fs::read_to_string(r.join("crates/core/tests/rig_space.rs")).unwrap();
+    code = fnv(code, &me.as_bytes()[..me.find(MARK).unwrap()]);
+    code = fnv(code, t.all.join(",").as_bytes());
+    let text = std::fs::read_to_string(r.join("data/content.json")).unwrap();
+    let mut data: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let mut entry = BTreeMap::new();
+    for list in ["abilities", "evolutions", "parts"] {
+        for e in data[list].as_array().unwrap() {
+            entry.insert(e["id"].as_str().unwrap().to_string(), e.to_string());
+        }
+        data[list] = serde_json::Value::Null;
+    }
+    code = fnv(code, data.to_string().as_bytes());
+    let token = t
+        .all
+        .iter()
+        .map(|id| fnv(FNV, entry.get(id).unwrap().as_bytes()))
+        .collect();
+    Keys { code, token }
+}
+
+fn rig_key(k: &Keys, level: i32, row: &[usize]) -> u64 {
+    let mut h = fnv(k.code, &level.to_le_bytes());
+    for i in row {
+        h = fnv(h, &k.token[*i].to_le_bytes());
+    }
+    h
+}
+
+/// One line of the log.
+#[derive(Clone)]
+struct Line {
+    number: u64,
+    rig: String,
+    result: String,
+    behaviour: String,
+    print: u64,
+    key: u64,
+    tested: String,
+}
+
+impl Line {
+    fn text(&self) -> String {
+        format!(
+            "{}\t{}\t{}\t{}\t{:016x}\t{:016x}\t{}",
+            self.number, self.rig, self.result, self.behaviour, self.print, self.key, self.tested
+        )
+    }
+
+    fn parse(s: &str) -> Option<Line> {
+        let f: Vec<&str> = s.split('\t').collect();
+        if f.len() != 7 {
+            return None;
+        }
+        Some(Line {
+            number: f[0].parse().ok()?,
+            rig: f[1].to_string(),
+            result: f[2].to_string(),
+            behaviour: f[3].to_string(),
+            print: u64::from_str_radix(f[4], 16).ok()?,
+            key: u64::from_str_radix(f[5], 16).ok()?,
+            tested: f[6].to_string(),
+        })
+    }
+}
+
+fn result_text(p: &Played) -> String {
+    let mut r: Vec<String> = p.failures.iter().map(|f| format!("FAIL {f}")).collect();
+    r.extend(p.notes.iter().map(|n| format!("note {n}")));
+    if r.is_empty() {
+        "ok".into()
+    } else {
+        r.join("; ").replace('\t', " ")
+    }
+}
+
+fn behaviour_text(p: &Played) -> String {
+    let list = |v: &[String]| {
+        if v.is_empty() {
+            "-".to_string()
+        } else {
+            v.join(",")
+        }
+    };
+    format!(
+        "fired {} dealt {} kills {} made {} fields {} reactions {} depth {}",
+        p.fired,
+        p.dealt,
+        p.kills,
+        list(&p.payloads),
+        list(&p.fields),
+        p.reactions,
+        p.depth
+    )
+}
+
+/// Today's date from the system clock (UTC), as 2026-10-15.
+fn today() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    // days to a civil date (Howard Hinnant's algorithm)
+    let z = secs / 86_400 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// The commit the rules were read from, with + when the tree has changes.
+fn commit() -> String {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(root())
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default()
+    };
+    let head = git(&["rev-parse", "--short", "HEAD"]);
+    let dirty = !git(&["status", "--porcelain", "--untracked-files=no"]).is_empty();
+    format!(
+        "{}{}",
+        if head.is_empty() { "unknown" } else { &head },
+        if dirty { "+" } else { "" }
+    )
+}
+
+/// The index of the local log: for each file of 4,096 rig numbers, the key
+/// it was last played under, how many rigs it holds, a fingerprint of their
+/// behaviour, and the results.
+#[derive(Clone, Default)]
+struct Block {
+    key: u64,
+    rigs: u64,
+    failed: u64,
+    noted: u64,
+    print: u64,
+    tested: String,
+}
+
+type Index = BTreeMap<(usize, i32, u64), Block>;
+
+fn read_index(p: &Path, tokens: u64) -> Index {
+    let mut out = Index::new();
+    let Ok(f) = std::fs::File::open(p) else { return out };
+    let mut lines = std::io::BufReader::new(f).lines().map_while(Result::ok);
+    // a different list of tokens numbers rigs differently: start again
+    if lines.next() != Some(format!("tokens\t{tokens:016x}")) {
+        return out;
+    }
+    for l in lines {
+        let f: Vec<&str> = l.split('\t').collect();
+        if f.len() != 9 {
+            continue;
+        }
+        let (Ok(len), Ok(level), Ok(b)) = (f[0].parse(), f[1].parse(), f[2].parse()) else {
+            continue;
+        };
+        out.insert(
+            (len, level, b),
+            Block {
+                key: u64::from_str_radix(f[3], 16).unwrap_or(0),
+                rigs: f[4].parse().unwrap_or(0),
+                failed: f[5].parse().unwrap_or(0),
+                noted: f[6].parse().unwrap_or(0),
+                print: u64::from_str_radix(f[7], 16).unwrap_or(0),
+                tested: f[8].to_string(),
+            },
+        );
+    }
+    out
+}
+
+fn write_index(p: &Path, tokens: u64, index: &Index) {
+    let mut s = format!("tokens\t{tokens:016x}\n");
+    for ((len, level, b), e) in index {
+        s += &format!(
+            "{len}\t{level}\t{b}\t{:016x}\t{}\t{}\t{}\t{:016x}\t{}\n",
+            e.key, e.rigs, e.failed, e.noted, e.print, e.tested
+        );
+    }
+    std::fs::write(p, s).unwrap();
+}
+
+fn block_path(dir: &Path, len: usize, level: i32, b: u64) -> PathBuf {
+    dir.join(format!("L{len}-level{level}"))
+        .join(format!("{b:06}.tsv"))
+}
+
+fn read_block(p: &Path) -> BTreeMap<u64, Line> {
+    let Ok(f) = std::fs::File::open(p) else {
+        return BTreeMap::new();
+    };
+    std::io::BufReader::new(f)
+        .lines()
+        .map_while(Result::ok)
+        .filter_map(|l| Line::parse(&l))
+        .map(|l| (l.number, l))
+        .collect()
+}
+
+fn write_block(p: &Path, lines: &BTreeMap<u64, Line>) {
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    let mut f = std::io::BufWriter::new(std::fs::File::create(p).unwrap());
+    for l in lines.values() {
+        writeln!(f, "{}", l.text()).unwrap();
+    }
+}
+
+/// Plays rigs on every core and returns what each did.
+fn play_all(c: &Content, rows: &[(u64, Vec<String>)], level: i32) -> Vec<Played> {
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let chunk = rows.len().div_ceil(threads).max(1);
+    let mut out = Vec::with_capacity(rows.len());
+    std::thread::scope(|s| {
+        let jobs: Vec<_> = rows
+            .chunks(chunk)
+            .map(|part| {
+                s.spawn(move || {
+                    part.iter()
+                        .map(|(n, row)| judge(c, row, level, n % 4 == 0))
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        for j in jobs {
+            out.extend(j.join().unwrap());
+        }
+    });
+    out
+}
+
+#[test]
+#[ignore]
+fn logbook() {
+    let get = |k: &str, d: &str| std::env::var(k).unwrap_or_else(|_| d.to_string());
+    let budget = get("RIG_BUDGET_S", "120").parse::<f64>().unwrap_or(120.0);
+    let lengths: Vec<usize> = get("RIG_LENGTHS", "1,2,3,4")
+        .split(',')
+        .filter_map(|x| x.trim().parse().ok())
+        .collect();
+    let levels: Vec<i32> = get("RIG_LEVELS", "1")
+        .split(',')
+        .filter_map(|x| x.trim().parse().ok())
+        .collect();
+    let c = quiet();
+    let t = tokens(&c);
+    let k = keys(&t);
+    let token_list = fnv(FNV, t.all.join(",").as_bytes());
+    let dir = root().join("rig-log");
+    let repo = root().join("tests/rig-log");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&repo).unwrap();
+    let mut index = read_index(&dir.join("index.tsv"), token_list);
+    if index.is_empty() {
+        // a new list of tokens renumbers every rig: the old files go
+        for e in std::fs::read_dir(&dir).unwrap().flatten() {
+            if e.path().is_dir() {
+                std::fs::remove_dir_all(e.path()).unwrap();
+            }
+        }
+    }
+    let (date, at) = (today(), commit());
+    let tested = format!("{date} {at}");
+    let start = Instant::now();
+    let (mut played, mut fresh, mut changed) = (0u64, 0u64, Vec::new());
+    let mut notable: BTreeMap<String, String> = std::fs::read_to_string(dir.join("notable.tsv"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.splitn(4, '\t').collect();
+            (f.len() == 4).then(|| (format!("{}\t{}\t{}", f[0], f[1], f[2]), f[3].to_string()))
+        })
+        .collect();
+    quiet_hook();
+    'all: for &level in &levels {
+        for &len in &lengths {
+            let blocks = rows(&t, len).div_ceil(BLOCK);
+            for b in 0..blocks {
+                if start.elapsed().as_secs_f64() > budget {
+                    break 'all;
+                }
+                let span = b * BLOCK..((b + 1) * BLOCK).min(rows(&t, len));
+                let want: Vec<(u64, Vec<usize>, u64)> = span
+                    .filter_map(|n| rig_at(&t, len, n).map(|r| (n, r)))
+                    .map(|(n, r)| {
+                        let key = rig_key(&k, level, &r);
+                        (n, r, key)
+                    })
+                    .collect();
+                let block_key = want.iter().fold(FNV, |h, (_, _, key)| fnv(h, &key.to_le_bytes()));
+                let entry = index.get(&(len, level, b));
+                if entry.map(|e| e.key == block_key && e.rigs == want.len() as u64) == Some(true) {
+                    fresh += want.len() as u64;
+                    continue;
+                }
+                let path = block_path(&dir, len, level, b);
+                let mut lines = read_block(&path);
+                let todo: Vec<(u64, Vec<String>)> = want
+                    .iter()
+                    .filter(|(n, _, key)| lines.get(n).map(|l| l.key != *key).unwrap_or(true))
+                    .map(|(n, r, _)| (*n, r.iter().map(|i| t.all[*i].clone()).collect()))
+                    .collect();
+                let keyed: BTreeMap<u64, u64> = want.iter().map(|(n, _, key)| (*n, *key)).collect();
+                for ((n, row), p) in todo.iter().zip(play_all(&c, &todo, level)) {
+                    let line = Line {
+                        number: *n,
+                        rig: row.join(" "),
+                        result: result_text(&p),
+                        behaviour: behaviour_text(&p),
+                        print: p.print,
+                        key: keyed[n],
+                        tested: tested.clone(),
+                    };
+                    let id = format!("{len}\t{level}\t{n}");
+                    if let Some(old) = lines.get(n) {
+                        if old.print != line.print {
+                            changed.push(format!(
+                                "{id}\t{}\twas: {} | {}\tnow: {} | {}",
+                                line.rig, old.result, old.behaviour, line.result, line.behaviour
+                            ));
+                        }
+                    }
+                    if line.result == "ok" {
+                        notable.remove(&id);
+                    } else {
+                        notable.insert(id, format!("{}\t{}\t{}", line.rig, line.result, tested));
+                    }
+                    lines.insert(*n, line);
+                    played += 1;
+                }
+                // a rig that is no longer valid leaves the log
+                lines.retain(|n, _| keyed.contains_key(n));
+                write_block(&path, &lines);
+                index.insert(
+                    (len, level, b),
+                    Block {
+                        key: block_key,
+                        rigs: lines.len() as u64,
+                        failed: lines.values().filter(|l| l.result.contains("FAIL")).count() as u64,
+                        noted: lines
+                            .values()
+                            .filter(|l| l.result != "ok" && !l.result.contains("FAIL"))
+                            .count() as u64,
+                        print: lines.values().fold(FNV, |h, l| fnv(h, &l.print.to_le_bytes())),
+                        tested: tested.clone(),
+                    },
+                );
+            }
+        }
+    }
+    let _ = std::panic::take_hook();
+    let secs = start.elapsed().as_secs_f64();
+    write_index(&dir.join("index.tsv"), token_list, &index);
+    let notable_text: String = notable.iter().map(|(k, v)| format!("{k}\t{v}\n")).collect();
+    std::fs::write(dir.join("notable.tsv"), &notable_text).unwrap();
+    // every change goes to the local log; the repository keeps the first 200
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("changes.tsv"))
+        .unwrap();
+    for l in &changed {
+        writeln!(log, "{date}\t{at}\t{l}").unwrap();
+    }
+    write_summary(&repo, &t, &index, &notable_text, &changed, &tested, played, secs);
+    let logged: u64 = index.values().map(|e| e.rigs).sum();
+    println!(
+        "logbook: played {played} rigs in {secs:.1} s, {fresh} already fresh; {} changed behaviour; \
+         {logged} rigs in the log; {} failing or noted",
+        changed.len(),
+        notable.len()
+    );
+    let failing = notable.values().filter(|v| v.contains("FAIL")).count();
+    assert_eq!(
+        failing, 0,
+        "rigs in the log break a rule: see rig-log/notable.tsv"
+    );
+}
+
+/// The repository's copy: a line for each file of the log, every failing or
+/// noted rig, and this run's changes (at most 200 of them).
+#[allow(clippy::too_many_arguments)]
+fn write_summary(
+    repo: &Path,
+    t: &Tokens,
+    index: &Index,
+    notable: &str,
+    changed: &[String],
+    tested: &str,
+    played: u64,
+    secs: f64,
+) {
+    let mut s = String::from(
+        "# One line for each file of 4,096 rig numbers in the local log (rig-log/).\n\
+         # length\tlevel\tblock\trigs\tfailed\tnoted\tbehaviour\tkey\tlast tested\n",
+    );
+    let mut by_len: BTreeMap<(usize, i32), (u64, u64)> = BTreeMap::new();
+    for ((len, level, b), e) in index {
+        s += &format!(
+            "{len}\t{level}\t{b}\t{}\t{}\t{}\t{:016x}\t{:016x}\t{}\n",
+            e.rigs, e.failed, e.noted, e.print, e.key, e.tested
+        );
+        let x = by_len.entry((*len, *level)).or_default();
+        x.0 += e.rigs;
+        x.1 += e.failed;
+    }
+    std::fs::write(repo.join("summary.tsv"), s).unwrap();
+    std::fs::write(
+        repo.join("notable.tsv"),
+        format!("# length\tlevel\trig number\trig\tresult\tlast tested\n{notable}"),
+    )
+    .unwrap();
+    let mut runs = std::fs::read_to_string(repo.join("runs.tsv")).unwrap_or_else(|_| {
+        "# date and commit\tplayed\tseconds\tchanged\tlogged by length and level\n".into()
+    });
+    let cover: Vec<String> = by_len
+        .iter()
+        .map(|((len, level), (n, _))| format!("L{len} level {level}: {n} of {}", space(t, *len)))
+        .collect();
+    runs += &format!(
+        "{tested}\t{played}\t{secs:.0}\t{}\t{}\n",
+        changed.len(),
+        cover.join(", ")
+    );
+    std::fs::write(repo.join("runs.tsv"), runs).unwrap();
+    let mut ch = String::from(
+        "# Rigs whose behaviour changed in the latest run (at most 200; all are in rig-log/changes.tsv)\n",
+    );
+    for l in changed.iter().take(200) {
+        ch += l;
+        ch += "\n";
+    }
+    std::fs::write(repo.join("changes.tsv"), ch).unwrap();
 }

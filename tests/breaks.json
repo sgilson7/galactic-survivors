@@ -607,5 +607,54 @@
     "find": "        if let Some(f) = FieldKind::parse(&p.field) {",
     "replace": "        if let Some(f) = FieldKind::parse(&p.field).filter(|_| false) {",
     "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "a formation's tethers replace each other",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "self.effects.retain(|e| !same(e) || e.life == e.full);",
+    "replace": "self.effects.retain(|e| !same(e));",
+    "test": "each_copy_of_a_formation_on_tether_keeps_its_own_line"
+  },
+  {
+    "name": "rig space: a formation's tethers replace each other",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "self.effects.retain(|e| !same(e) || e.life == e.full);",
+    "replace": "self.effects.retain(|e| !same(e));",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "every tether joins the farthest placed thing",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "match ends.get(e.count.max(0) as usize) {",
+    "replace": "match ends.first() {",
+    "test": "twin_tethers_join_the_farthest_placed_thing_and_the_next"
+  },
+  {
+    "name": "an orbiting body never waits to leave a field",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "if e.marks[b].map(|a| e.angle - a >= turns).unwrap_or(true) {",
+    "replace": "if e.marks[b].map(|_| true).unwrap_or(true) {",
+    "test": "an_orbiting_body_leaves_a_field_then_waits_a_full_turn"
+  },
+  {
+    "name": "rig space: an orbit leaves no field",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "                                self.add_field(content, fk, at, 30, e.damage, e.seat);\n                            }\n                        }",
+    "replace": "                            }\n                        }",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "a tether leaves a field on every cut",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "if last.map(|t| now as i32 - t >= gap).unwrap_or(true) {",
+    "replace": "if last.map(|_| true).unwrap_or(true) {",
+    "test": "a_tether_leaves_a_field_where_it_cuts_at_most_every_two_seconds"
+  },
+  {
+    "name": "a new tether removes the old one mid-update",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "                for e in self.effects.iter_mut().filter(|e| same(e) && e.life != e.full) {\n                    e.life = 0;\n                }",
+    "replace": "                self.effects.retain(|e| !same(e) || e.life == e.full);",
+    "test": "rigs_the_logbook_found_keep_every_rule"
   }
 ]

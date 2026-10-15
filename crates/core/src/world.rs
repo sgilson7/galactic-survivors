@@ -430,6 +430,10 @@ pub struct Effect {
     pub carry: Option<crate::rig::Carry>,
     #[serde(default)]
     pub field: Option<crate::field::FieldKind>,
+    /// When each orbiting body last left a field (the orbit's angle then),
+    /// or when a tether last did (the tick). Empty until the first.
+    #[serde(default)]
+    pub marks: Vec<Option<i32>>,
     #[serde(default)]
     pub burst_pct: i32,
     #[serde(default)]

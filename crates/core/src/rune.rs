@@ -242,6 +242,7 @@ impl World {
             anchored: true,
             carry: None,
             field: None,
+            marks: Vec::new(),
             burst_pct: 0,
             pull: 0,
             slow_pct: 0,
