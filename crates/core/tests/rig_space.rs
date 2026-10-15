@@ -252,7 +252,9 @@ fn a_payload_that_hit_but_left_no_field_fails_even_beside_another() {
         .collect();
     let p = judge(&c, &row, 1, false);
     assert!(
-        p.failures.iter().any(|f| f == "field: boomerang_disc left no slick field"),
+        p.failures
+            .iter()
+            .any(|f| f == "field: boomerang_disc left no slick field"),
         "{:?} {:?}",
         p.failures,
         p.notes
