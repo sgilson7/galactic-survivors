@@ -61,6 +61,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 
 | Check | Result |
 | --- | --- |
+| `scripts/publish.sh` from df0c3e6 (the lobby, T23–T24), then the live check | BUILDER CHECK PASSED; Pages built; live PASSED in all three engines, 15 Oct 2026 |
 | `./scripts/check.sh`, after the co-op lobby | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `./scripts/count-tests.sh`, after the co-op lobby | 194 passed, 0 failed, 3 ignored (the probe, the rig sweep and the logbook) |
 | `python3 tests/browser/online.py chromium firefox webkit`, after the co-op lobby | ONLINE CHECK PASSED (now presses Ready) |
