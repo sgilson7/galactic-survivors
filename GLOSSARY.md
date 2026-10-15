@@ -28,6 +28,52 @@ One choice offered at a level-up or after a rift: a new ability, a higher level 
 
 Two players in one run, each in their own browser, connected directly to each other. Both players share experience and level up together.
 
+### Rig
+
+A row of sockets that fires on its own, read left to right each time. A player has one rig for each ability slot. Each part in a rig adds to its recharge.
+
+### Socket
+
+One place in a rig. It holds an ability, a part, or nothing.
+
+### Part
+
+What goes in a socket beside the abilities: a modifier, a formation or a trigger. Level-up cards offer parts; rare ones are opened by achievements or found in the salvage cache.
+
+Not: relic, artifact, spell
+
+### Payload
+
+An ability as a rig sees it: the thing a rig puts into the world when it fires.
+
+### Modifier
+
+A part that changes the next payload in its rig, such as leaving fire where it lands.
+
+### Formation
+
+A part that fires the next payload in its rig several times at once, arranged around you or side by side.
+
+### Trigger
+
+A part that hands the rest of its rig to an event: where the payload before it hits, ends or defeats an enemy, or when you walk a stride, dash, draw a rune, or every few seconds.
+
+### Stride
+
+A set distance walked, counted by the Each Stride trigger.
+
+### Spare parts
+
+Parts and abilities held but not in a rig. They do nothing until moved into a socket.
+
+### Ground field
+
+A patch of fire, frost, charge or slick that some payloads leave where they land. Fields hurt or slow enemies standing in them, and two kinds that meet react.
+
+### Rune
+
+A shape drawn by walking a closed loop: a circle, a triangle or a square. A rune strikes every enemy inside the loop and gives a passive for a while; several of one shape add up.
+
 ### Ping
 
 The time a message takes to reach the other co-op player and come back, in milliseconds. Shown at the top right during a co-op run.

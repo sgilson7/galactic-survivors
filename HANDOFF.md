@@ -1,6 +1,6 @@
 # Handoff
 
-Stage 9. `C5 Consolidate in your own words`. A fresh session starts here.
+Stage 9. `C5 Consolidate in your own words`. Last updated after round 3, 15 October 2026. A fresh session starts here.
 
 ## Where things are
 
@@ -30,10 +30,22 @@ The person's friends played the first build and sent twelve notes. All twelve ar
 
 The save format is now version 2. A version 1 file still loads: its modules keep their ranks, and its outfitter ranks are refunded in gold, so buy them again under the caps.
 
+## What changed in round 3 (15 October 2026, TRIAGE T13–T15)
+
+- **Co-op is rollback.** Your own moves land after 2 ticks instead of 6. The partner is guessed and corrected, a browser runs at most 8 ticks ahead, and inputs travel on a channel that never waits for a lost packet. A level-up in co-op no longer stops both players: the chooser is shielded until they move. A ping, the number of corrections and the time spent waiting show at the top right.
+- **Rigs.** Each ability slot is a rig of sockets read left to right. Parts (modifiers, formations, triggers) come from level-up cards. E opens the rig window, which never pauses. Six rare parts are opened by eight new achievements or found in the salvage cache.
+- **New content.** 7 abilities, 8 passives, 4 ground fields that react (fire, frost, charge, slick, and steam from fire meeting frost), and 3 runes drawn by walking a loop.
+- **A faster tick.** Crowd separation no longer sorts a list for every enemy; a late tick is about half the time it was.
+
 ## What passed
 
 | Check | Result |
 | --- | --- |
+| `./scripts/check.sh`, after round 3 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
+| `python3 tests/browser/online.py chromium firefox webkit`, after round 3 (rollback and the fast channel) | ONLINE CHECK PASSED |
+| `./scripts/count-tests.sh`, after round 3 | 174 passed, 0 failed, 1 ignored (the probe) |
+| `python3 scripts/break_tests.py`, after round 3 | 79 of 79 planted defects caught |
+| `python3 tools/art/art.py --check-only`, after round 3 | 144 pictures pass |
 | `./scripts/check.sh` | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 14 Oct 2026 |
 | `./scripts/check.sh`, after the playtest round | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 14 Oct 2026 |
 | `python3 tests/browser/online.py chromium firefox webkit`, after the playtest round | ONLINE CHECK PASSED |
@@ -46,6 +58,12 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `python3 tools/art/art.py --check-only` | 95 pictures pass, after the playtest round |
 
 ## Try these by hand first
+
+After round 3:
+1. Play co-op between two homes. Watch the numbers at the top right (ping, corrections, waited) and send them (R3.9).
+2. Press E in a run and move a part: pick it, then click a socket. Try Ring, Ignite and the Orbital Lance in one rig.
+3. Walk a triangle around a crowd and check the rune strikes the enemies inside.
+4. Read the new names in `data/strings.json` (R3.18) and look over the new icons (R3.20).
 
 After the playtest round:
 1. Load the save your friends already have (version 1). Their modules should come through, and their outfitter ranks should come back as gold.
@@ -63,6 +81,10 @@ From the first build:
 
 ## Rows for the person
 
+- R3.9: co-op between two homes, with the new readout.
+- R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
+- R3.18: the names and texts of the new content were written by the agent.
+- R3.20: the weakest new icons.
 - R1.16: every name and string in `data/strings.json` was written by the agent.
 - R1.17: the balance in `data/content.json` is a first pass against a bot.
 - R1.18: co-op over room codes and real networks is untested.

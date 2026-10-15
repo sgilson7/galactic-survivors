@@ -2,8 +2,10 @@
 //! shots and effects do. Every ability is one of eight behaviours
 //! (`content::Kind`) with numbers from the content file.
 
-use crate::content::{Aim, Content, Kind, Level};
+use crate::content::{Aim, Content, Kind, Level, On};
+use crate::field::FieldKind;
 use crate::geom::{dist2, from_angle, in_arc, per_tick, px, seg_dist2, ticks, within, V};
+use crate::rig::{Carry, Origin};
 use crate::world::{Effect, EffectKind, PickupKind, Shot, World};
 
 /// What an ability does at one level, after the player's stats.
@@ -31,6 +33,54 @@ pub struct Scaled {
     pub fuse: i32,
     pub every: i32,
     pub fire: i32,
+    /// The ground field it leaves, from its level or a modifier (T14).
+    pub field: Option<FieldKind>,
+    pub burst_pct: i32,
+    pub returns: bool,
+    pub sweep: bool,
+}
+
+impl Scaled {
+    /// Whether the payload is placed somewhere rather than sent in a
+    /// direction: a formation spreads these out in space, not in angle.
+    pub fn places(&self) -> bool {
+        matches!(
+            self.kind,
+            Kind::Nova | Kind::Bomb | Kind::Strike | Kind::Well | Kind::Turret | Kind::Orbit
+        )
+    }
+
+    /// A turret's shot, from the turret's numbers.
+    fn for_turret_shot(e: &Effect) -> Scaled {
+        Scaled {
+            kind: Kind::Shot,
+            aim: Aim::Nearest,
+            damage: e.damage,
+            cooldown: 1,
+            count: 1,
+            speed: e.shot_speed,
+            radius: e.shot_radius,
+            area: e.shot_radius,
+            pierce: 1,
+            bounce: 0,
+            homing: false,
+            spread: 0,
+            range: e.shot_range,
+            width: 0,
+            duration: 0,
+            knockback: 0,
+            pull: 0,
+            slow_pct: e.slow_pct,
+            slow: e.slow,
+            fuse: 0,
+            every: 0,
+            fire: 0,
+            field: e.field,
+            burst_pct: 0,
+            returns: false,
+            sweep: false,
+        }
+    }
 }
 
 impl World {
@@ -44,9 +94,10 @@ impl World {
         let ch = &content.characters[self.players[seat].character];
         let dmg_pct = 100 + ch.damage_pct + s.damage_pct;
         let cd_pct = (100 - s.cooldown_pct).max(40);
-        let area_pct = 100 + s.area_pct;
+        let fused = matches!(def.kind, Kind::Bomb | Kind::Strike);
+        let area_pct = 100 + s.area_pct + if fused { s.fuse_area_pct } else { 0 };
         let extra = match def.kind {
-            Kind::Shot | Kind::Bomb | Kind::Orbit | Kind::Turret => s.projectiles,
+            Kind::Shot | Kind::Bomb | Kind::Orbit | Kind::Turret | Kind::Strike => s.projectiles,
             Kind::Chain => s.projectiles * 2,
             _ => 0,
         };
@@ -73,6 +124,10 @@ impl World {
             fuse: ticks(lv.fuse_ms),
             every: ticks(lv.tick_ms),
             fire: ticks(lv.fire_ms),
+            field: FieldKind::parse(&lv.field),
+            burst_pct: 0,
+            returns: lv.returns > 0,
+            sweep: lv.sweep > 0,
         })
     }
 
@@ -141,8 +196,8 @@ impl World {
         let from = p.pos;
         let reach = if s.range > 0 { s.range } else { 500 };
         match s.aim {
-            Aim::Own => Some((p.facing, None)),
-            Aim::Move => Some((p.facing, None)),
+            Aim::Own | Aim::Move => Some((p.facing, None)),
+            Aim::Behind => Some((V::ZERO.sub(p.facing), None)),
             Aim::Pointer => {
                 if !p.load.autoaim && p.aiming {
                     Some((p.aim, None))
@@ -168,34 +223,89 @@ impl World {
 
     // ---- casting -------------------------------------------------------------
 
+    /// Every rig fires through `rig.rs` (T15); this is its old name.
     pub fn cast(&mut self, content: &Content) {
-        for seat in 0..self.players.len() {
-            if !self.players[seat].alive {
-                continue;
-            }
-            for k in 0..self.players[seat].abilities.len() {
-                let slot = &mut self.players[seat].abilities[k];
-                slot.cd -= 1;
-                if slot.cd > 0 {
-                    continue;
-                }
-                let (id, level) = (slot.id.clone(), slot.level);
-                let Some(s) = self.scaled(content, seat, &id, level) else {
-                    continue;
-                };
-                let fired = self.fire(content, seat, &id, &s);
-                // an ability with nothing to aim at tries again soon
-                self.players[seat].abilities[k].cd = if fired { s.cooldown } else { ticks(150) };
+        self.fire_rigs(content);
+    }
+
+    /// The direction a payload fired from `from` points, if it has one.
+    pub fn aim_dir(&mut self, content: &Content, seat: usize, s: &Scaled, from: Origin) -> Option<V> {
+        let _ = content;
+        self.aim_from(seat, s, from).map(|(d, _)| d)
+    }
+
+    /// Like `aim_for`, from any place: away from the player, the pointer
+    /// plays no part and the nearest enemy to that place is the target.
+    fn aim_from(&mut self, seat: usize, s: &Scaled, from: Origin) -> Option<(V, Option<usize>)> {
+        if from.player {
+            return self.aim_for(seat, s);
+        }
+        let reach = if s.range > 0 { s.range } else { 500 };
+        match s.aim {
+            Aim::Own | Aim::Move | Aim::Behind => Some((self.players[seat].facing, None)),
+            _ => {
+                let i = self.nearest_foe(from.pos, reach)?;
+                Some((self.foes[i].pos.sub(from.pos), Some(i)))
             }
         }
     }
 
-    fn fire(&mut self, content: &Content, seat: usize, id: &str, s: &Scaled) -> bool {
-        let from = self.players[seat].pos;
+    /// Where a placed payload (a bomb, a strike, a well) lands.
+    fn landing(&mut self, seat: usize, s: &Scaled, from: Origin, dir: Option<V>) -> Option<V> {
+        let p = &self.players[seat];
+        match s.aim {
+            Aim::Own => {
+                if from.player {
+                    let jitter = from_angle(self.rng.below(crate::world::geom_turn()) as i32, px(20));
+                    Some(from.pos.add(jitter))
+                } else {
+                    Some(from.pos)
+                }
+            }
+            Aim::Behind => {
+                if from.player && !p.moving {
+                    return None;
+                }
+                let back = dir
+                    .map(|d| d.with_len(px(36)))
+                    .unwrap_or(V::ZERO.sub(p.facing.with_len(px(36))));
+                Some(from.pos.add(back))
+            }
+            _ => {
+                if let Some(d) = dir {
+                    let reach = if s.range > 0 { s.range } else { 160 };
+                    return Some(from.pos.add(d.with_len(px(reach.min(260)))));
+                }
+                let (d, i) = self.aim_from(seat, s, from)?;
+                Some(match i {
+                    Some(i) => self.foes[i].pos,
+                    None => from.pos.add(d),
+                })
+            }
+        }
+    }
+
+    /// Fires one copy of a payload from `from`, toward `dir` when a
+    /// formation gave one. Returns false when it had nothing to aim at.
+    pub fn fire_one(
+        &mut self,
+        content: &Content,
+        seat: usize,
+        id: &str,
+        s: &Scaled,
+        from: Origin,
+        dir: Option<V>,
+    ) -> bool {
+        let pos = from.pos;
+        let anchored = !from.player;
         match s.kind {
             Kind::Shot => {
-                let Some((dir, _)) = self.aim_for(seat, s) else {
-                    return false;
+                let dir = match dir {
+                    Some(d) => d,
+                    None => match self.aim_from(seat, s, from) {
+                        Some((d, _)) => d,
+                        None => return false,
+                    },
                 };
                 let n = s.count;
                 for k in 0..n {
@@ -210,47 +320,60 @@ impl World {
                     } else {
                         1
                     };
-                    self.add_shot(
-                        content, seat, id, from, vel, s.damage, s.radius, s.pierce, s.bounce, s.homing, life,
-                    );
+                    self.add_shot(content, seat, id, pos, vel, s, life);
                 }
                 true
             }
             Kind::Arc => {
-                let Some((dir, _)) = self.aim_for(seat, s) else {
-                    return false;
+                let dir = match dir {
+                    Some(d) => d,
+                    None => match self.aim_from(seat, s, from) {
+                        Some((d, _)) => d,
+                        None => return false,
+                    },
                 };
                 let push = if s.knockback > 0 {
                     s.knockback
                 } else {
                     content.run.knockback / 2
                 };
-                for i in self.near(content, from, s.area + 40) {
+                for i in self.near(content, pos, s.area + 40) {
                     let f = &self.foes[i];
                     let r = content.enemies[f.kind].radius;
-                    let to = f.pos.sub(from);
-                    if within(f.pos, from, px(s.area + r)) && in_arc(dir, to, s.width) {
+                    let to = f.pos.sub(pos);
+                    if within(f.pos, pos, px(s.area + r)) && in_arc(dir, to, s.width) {
                         self.hurt_foe(content, i, s.damage, seat, id, to.with_len(per_tick(push * 3)));
                     }
+                }
+                if let Some(f) = s.field {
+                    self.add_field(
+                        content,
+                        f,
+                        pos.add(dir.with_len(px(s.area / 2))),
+                        s.area / 2,
+                        s.damage,
+                        seat,
+                    );
                 }
                 self.add_effect(
                     content,
                     Effect {
                         kind: EffectKind::Wedge,
                         width: s.width,
-                        ..self.effect_base(seat, id, from, dir, s)
+                        anchored,
+                        ..self.effect_base(seat, id, pos, dir, s)
                     },
                 );
                 true
             }
             Kind::Nova => {
-                for i in self.near(content, from, s.area + 40) {
+                for i in self.near(content, pos, s.area + 40) {
                     let f = &self.foes[i];
                     let r = content.enemies[f.kind].radius;
-                    if !within(f.pos, from, px(s.area + r)) {
+                    if !within(f.pos, pos, px(s.area + r)) {
                         continue;
                     }
-                    let to = f.pos.sub(from);
+                    let to = f.pos.sub(pos);
                     let push = if s.pull > 0 {
                         V::ZERO.sub(to.with_len(per_tick(s.pull * 4)))
                     } else if s.knockback > 0 {
@@ -264,36 +387,45 @@ impl World {
                     }
                     self.hurt_foe(content, i, s.damage, seat, id, push);
                 }
+                if let Some(f) = s.field {
+                    self.add_field(content, f, pos, s.area * 2 / 3, s.damage, seat);
+                }
                 let facing = self.players[seat].facing;
                 self.add_effect(
                     content,
                     Effect {
                         kind: EffectKind::Ring,
-                        ..self.effect_base(seat, id, from, facing, s)
+                        anchored,
+                        ..self.effect_base(seat, id, pos, facing, s)
                     },
                 );
                 true
             }
             Kind::Chain => {
-                let Some((_, Some(first))) = self.aim_for(seat, s) else {
-                    return false;
+                let first = match dir {
+                    Some(d) => self.nearest_foe(pos.add(d.with_len(px(60))), s.range.max(200)),
+                    None => self.aim_from(seat, s, from).and_then(|(_, i)| i),
                 };
-                let mut points = vec![from];
+                let Some(first) = first else { return false };
+                let mut points = vec![pos];
                 let mut hit_ids = Vec::new();
                 let mut at = first;
                 for _ in 0..s.count {
-                    let pos = self.foes[at].pos;
-                    points.push(pos);
+                    let fpos = self.foes[at].pos;
+                    points.push(fpos);
                     hit_ids.push(self.foes[at].id);
                     self.hurt_foe(content, at, s.damage, seat, id, V::ZERO);
+                    if let Some(f) = s.field {
+                        self.add_field(content, f, fpos, 30, s.damage, seat);
+                    }
                     let next = self
                         .foes
                         .iter()
                         .enumerate()
                         .filter(|(_, f)| {
-                            f.hp > 0 && !hit_ids.contains(&f.id) && within(f.pos, pos, px(s.radius))
+                            f.hp > 0 && !hit_ids.contains(&f.id) && within(f.pos, fpos, px(s.radius))
                         })
-                        .map(|(i, f)| (dist2(pos, f.pos), f.id, i))
+                        .map(|(i, f)| (dist2(fpos, f.pos), f.id, i))
                         .min()
                         .map(|(_, _, i)| i);
                     match next {
@@ -308,78 +440,149 @@ impl World {
                         points,
                         life: ticks(180),
                         full: ticks(180),
-                        ..self.effect_base(seat, id, from, V::ZERO, s)
+                        anchored: true,
+                        ..self.effect_base(seat, id, pos, V::ZERO, s)
                     },
                 );
                 true
             }
             Kind::Bomb => {
-                for _ in 0..s.count {
-                    let target = if s.aim == Aim::Own {
-                        let jitter = from_angle(self.rng.below(crate::world::geom_turn()) as i32, px(20));
-                        Some(from.add(jitter))
-                    } else {
-                        self.aim_for(seat, s).map(|(dir, i)| match i {
-                            Some(i) => self.foes[i].pos,
-                            None => from.add(dir),
-                        })
+                let mut any = false;
+                for k in 0..s.count {
+                    let d = dir.map(|d| d.rotate(crate::fx::TURN / 24 * k));
+                    let Some(at) = self.landing(seat, s, from, d) else {
+                        return any;
                     };
-                    let Some(at) = target else {
-                        return false;
-                    };
+                    any = true;
                     self.add_effect(
                         content,
                         Effect {
                             kind: EffectKind::Bomb,
                             life: s.fuse,
                             full: s.fuse,
-                            armed: s.aim == Aim::Own,
+                            armed: matches!(s.aim, Aim::Own | Aim::Behind),
+                            anchored: true,
+                            ..self.effect_base(seat, id, at, V::ZERO, s)
+                        },
+                    );
+                }
+                any
+            }
+            Kind::Strike => {
+                let centre = match s.aim {
+                    Aim::Own => pos,
+                    _ => match self.landing(seat, s, from, dir) {
+                        Some(c) => c,
+                        None => return false,
+                    },
+                };
+                let n = s.count.max(1);
+                let turn = crate::fx::TURN;
+                let start = (self.tick as i32 * 97) % turn;
+                for k in 0..n {
+                    let at = centre.add(from_angle(start + turn * k / n, px(s.range)));
+                    let fuse = s.fuse + if s.sweep { s.every.max(1) * k } else { 0 };
+                    self.add_effect(
+                        content,
+                        Effect {
+                            kind: EffectKind::Strike,
+                            life: fuse.max(1),
+                            full: fuse.max(1),
+                            anchored: true,
                             ..self.effect_base(seat, id, at, V::ZERO, s)
                         },
                     );
                 }
                 true
             }
-            Kind::Orbit => {
-                // one ring of bodies per ability; a new cast replaces the old
+            Kind::Well => {
+                let Some(at) = self.landing(seat, s, from, dir) else {
+                    return false;
+                };
+                self.add_effect(
+                    content,
+                    Effect {
+                        kind: EffectKind::Well,
+                        every: s.every.max(1),
+                        anchored: true,
+                        ..self.effect_base(seat, id, at, V::ZERO, s)
+                    },
+                );
+                if let Some(f) = s.field {
+                    self.add_field(content, f, at, s.area, s.damage, seat);
+                }
+                true
+            }
+            Kind::Tether => {
+                // one line per player and ability; a new one replaces it
                 self.effects
-                    .retain(|e| !(e.kind == EffectKind::Orbit && e.seat == seat && e.ability == id));
+                    .retain(|e| !(e.kind == EffectKind::Tether && e.seat == seat && e.ability == id));
+                self.add_effect(
+                    content,
+                    Effect {
+                        kind: EffectKind::Tether,
+                        every: s.every.max(1),
+                        width: s.width,
+                        ..self.effect_base(seat, id, pos, V::ZERO, s)
+                    },
+                );
+                true
+            }
+            Kind::Orbit => {
+                if !anchored {
+                    // one ring of bodies per ability on the player; a new cast replaces it
+                    self.effects.retain(|e| {
+                        !(e.kind == EffectKind::Orbit && e.seat == seat && e.ability == id && !e.anchored)
+                    });
+                }
                 self.add_effect(
                     content,
                     Effect {
                         kind: EffectKind::Orbit,
                         count: s.count,
                         spin: s.speed * crate::geom::TPS / 256 / crate::geom::TPS,
-                        ..self.effect_base(seat, id, from, V::ZERO, s)
+                        anchored,
+                        ..self.effect_base(seat, id, pos, V::ZERO, s)
                     },
                 );
                 true
             }
             Kind::Beam => {
-                let Some((dir, _)) = self.aim_for(seat, s) else {
-                    return false;
+                let dir = match dir {
+                    Some(d) => d,
+                    None => match self.aim_from(seat, s, from) {
+                        Some((d, _)) => d,
+                        None => return false,
+                    },
                 };
+                if let Some(f) = s.field {
+                    self.add_field(content, f, pos.add(dir.with_len(px(s.range))), 50, s.damage, seat);
+                }
                 self.add_effect(
                     content,
                     Effect {
                         kind: EffectKind::Beam,
                         every: s.every.max(1),
-                        ..self.effect_base(seat, id, from, dir, s)
+                        anchored,
+                        ..self.effect_base(seat, id, pos, dir, s)
                     },
                 );
                 true
             }
             Kind::Turret => {
                 for k in 0..s.count {
-                    let at = from.add(V::new(px(30 * (2 * k - (s.count - 1))), px(-24)));
+                    let at = pos.add(V::new(px(30 * (2 * k - (s.count - 1))), px(-24)));
                     self.add_effect(
                         content,
                         Effect {
                             kind: EffectKind::Turret,
                             every: s.fire.max(1),
+                            // a seed pod grows before it fires
+                            cd: s.fuse,
                             shot_speed: s.speed,
                             shot_radius: s.radius,
                             shot_range: s.range,
+                            anchored: true,
                             ..self.effect_base(seat, id, at, V::ZERO, s)
                         },
                     );
@@ -412,11 +615,21 @@ impl World {
             shot_speed: 0,
             shot_radius: 0,
             shot_range: s.range,
+            anchored: false,
+            carry: None,
+            field: s.field,
+            burst_pct: s.burst_pct,
+            pull: s.pull,
+            slow_pct: s.slow_pct,
+            slow: s.slow,
         }
     }
 
     fn add_effect(&mut self, content: &Content, e: Effect) {
-        let lasting = matches!(e.kind, EffectKind::Orbit | EffectKind::Turret | EffectKind::Bomb);
+        let lasting = matches!(
+            e.kind,
+            EffectKind::Orbit | EffectKind::Turret | EffectKind::Bomb | EffectKind::Strike | EffectKind::Well
+        );
         if self.effects.len() >= content.run.effect_cap && !lasting {
             return;
         }
@@ -424,20 +637,7 @@ impl World {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn add_shot(
-        &mut self,
-        content: &Content,
-        seat: usize,
-        id: &str,
-        pos: V,
-        vel: V,
-        damage: i32,
-        radius: i32,
-        pierce: i32,
-        bounce: i32,
-        homing: bool,
-        life: i32,
-    ) {
+    fn add_shot(&mut self, content: &Content, seat: usize, id: &str, pos: V, vel: V, s: &Scaled, life: i32) {
         if self.shots.len() >= content.run.shot_cap {
             return;
         }
@@ -446,14 +646,45 @@ impl World {
             ability: id.to_string(),
             pos,
             vel,
-            damage,
-            radius,
-            pierce,
-            bounce,
-            homing,
+            damage: s.damage,
+            radius: s.radius,
+            pierce: s.pierce,
+            bounce: s.bounce,
+            homing: s.homing,
             life,
             hit: Vec::new(),
+            carry: None,
+            field: s.field,
+            burst_pct: s.burst_pct,
+            returns: s.returns,
+            full_life: life,
+            slow_pct: s.slow_pct,
+            slow: s.slow,
+            pull: s.pull,
         });
+    }
+
+    /// A trigger left on a shot or effect fires: once, then it is spent.
+    fn spring_carry(&mut self, content: &Content, seat: usize, carry: &mut Option<Carry>, on: On, at: V) {
+        if carry.as_ref().map(|c| c.on) != Some(on) {
+            return;
+        }
+        let Some(c) = carry.take() else { return };
+        let mut budget = crate::rig::MAX_PAYLOADS;
+        self.spring(content, seat, &c, at, &mut budget);
+    }
+
+    /// Where a payload ends: its burst and its field.
+    fn ending(&mut self, content: &Content, seat: usize, ability: &str, at: V, damage: i32, burst_pct: i32) {
+        if burst_pct > 0 {
+            let burst = (damage * burst_pct / 100).max(1);
+            for i in self.near(content, at, 70) {
+                let f = &self.foes[i];
+                if f.hp > 0 && within(f.pos, at, px(50 + content.enemies[f.kind].radius)) {
+                    self.hurt_foe(content, i, burst, seat, ability, V::ZERO);
+                }
+            }
+        }
     }
 
     // ---- shots and effects ---------------------------------------------------
@@ -470,6 +701,14 @@ impl World {
                     sh.vel = sh.vel.scale(3, 4).add(want.scale(1, 4)).with_len(speed);
                 }
             }
+            if sh.returns && sh.life == sh.full_life / 2 {
+                // halfway: turn for home, and every foe may be hit again
+                if let Some(p) = self.players.get(sh.seat) {
+                    let speed = sh.vel.len() as i32;
+                    sh.vel = p.pos.sub(sh.pos).with_len(speed);
+                }
+                sh.hit.clear();
+            }
             sh.pos = sh.pos.add(sh.vel);
             sh.life -= 1;
             let mut spent = sh.life <= 0;
@@ -485,7 +724,24 @@ impl World {
                     }
                     sh.hit.push(f.id);
                     let ability = sh.ability.clone();
-                    self.hurt_foe(content, i, sh.damage, sh.seat, &ability, sh.vel.with_len(push));
+                    if sh.slow_pct > 0 {
+                        self.foes[i].slow = self.foes[i].slow.max(sh.slow);
+                        self.foes[i].slow_pct = self.foes[i].slow_pct.max(sh.slow_pct);
+                    }
+                    let shove = if sh.pull > 0 {
+                        V::ZERO.sub(sh.vel.with_len(per_tick(sh.pull)))
+                    } else {
+                        sh.vel.with_len(push)
+                    };
+                    let killed = self.hurt_foe(content, i, sh.damage, sh.seat, &ability, shove);
+                    let at = sh.pos;
+                    if let Some(fk) = sh.field {
+                        self.add_field(content, fk, at, 40, sh.damage, sh.seat);
+                    }
+                    self.spring_carry(content, sh.seat, &mut sh.carry, On::Hit, at);
+                    if killed {
+                        self.spring_carry(content, sh.seat, &mut sh.carry, On::Kill, at);
+                    }
                     if sh.bounce > 0 {
                         sh.bounce -= 1;
                         let here = sh.pos;
@@ -510,12 +766,38 @@ impl World {
                 }
             }
             if spent {
+                let at = sh.pos;
+                self.ending(content, sh.seat, &sh.ability.clone(), at, sh.damage, sh.burst_pct);
+                self.spring_carry(content, sh.seat, &mut sh.carry, On::Expire, at);
                 self.shots.remove(k);
             } else {
                 self.shots[k] = sh;
                 k += 1;
             }
         }
+    }
+
+    /// The far end of a tether: the partner, or the farthest thing this
+    /// player has placed within reach.
+    fn tether_end(&self, e: &Effect) -> Option<V> {
+        let me = self.players.get(e.seat)?;
+        if let Some(q) = self.players.iter().find(|q| q.seat != e.seat && q.alive) {
+            if within(q.pos, me.pos, px(e.shot_range.max(200) * 2)) {
+                return Some(q.pos);
+            }
+        }
+        self.effects
+            .iter()
+            .filter(|x| {
+                x.seat == e.seat
+                    && matches!(
+                        x.kind,
+                        EffectKind::Bomb | EffectKind::Well | EffectKind::Turret | EffectKind::Strike
+                    )
+                    && within(x.pos, me.pos, px(e.shot_range.max(200)))
+            })
+            .max_by_key(|x| dist2(x.pos, me.pos))
+            .map(|x| x.pos)
     }
 
     pub fn update_effects(&mut self, content: &Content) {
@@ -531,12 +813,14 @@ impl World {
                 .unwrap_or((e.pos, false));
             match e.kind {
                 EffectKind::Ring | EffectKind::Wedge | EffectKind::Chain => {
-                    if e.kind != EffectKind::Chain {
+                    if e.kind != EffectKind::Chain && !e.anchored {
                         e.pos = owner.0;
                     }
                 }
                 EffectKind::Beam => {
-                    e.pos = owner.0;
+                    if !e.anchored {
+                        e.pos = owner.0;
+                    }
                     e.cd -= 1;
                     if e.cd <= 0 {
                         e.cd = e.every;
@@ -553,29 +837,119 @@ impl World {
                             .map(|(i, _)| i)
                             .collect();
                         for i in hit {
-                            self.hurt_foe(content, i, e.damage, e.seat, &e.ability, V::ZERO);
+                            let at = self.foes[i].pos;
+                            let killed = self.hurt_foe(content, i, e.damage, e.seat, &e.ability, V::ZERO);
+                            self.spring_carry(content, e.seat, &mut e.carry, On::Hit, at);
+                            if killed {
+                                self.spring_carry(content, e.seat, &mut e.carry, On::Kill, at);
+                            }
                         }
                     }
                 }
-                EffectKind::Bomb => {
-                    let trigger = e.armed
+                EffectKind::Tether => {
+                    e.pos = owner.0;
+                    if !owner.1 {
+                        e.life = 0;
+                    }
+                    e.cd -= 1;
+                    let end = self.tether_end(&e);
+                    e.points = end.map(|b| vec![e.pos, b]).unwrap_or_default();
+                    if e.cd <= 0 {
+                        e.cd = e.every;
+                        if let Some(b) = end {
+                            let reach = px(e.width.max(4));
+                            let hit: Vec<usize> = self
+                                .foes
+                                .iter()
+                                .enumerate()
+                                .filter(|(_, f)| {
+                                    let r = px(content.enemies[f.kind].radius) + reach;
+                                    f.hp > 0 && seg_dist2(f.pos, e.pos, b) <= r as i64 * r as i64
+                                })
+                                .map(|(i, _)| i)
+                                .collect();
+                            for i in hit {
+                                let at = self.foes[i].pos;
+                                let killed = self.hurt_foe(content, i, e.damage, e.seat, &e.ability, V::ZERO);
+                                self.spring_carry(content, e.seat, &mut e.carry, On::Hit, at);
+                                if killed {
+                                    self.spring_carry(content, e.seat, &mut e.carry, On::Kill, at);
+                                }
+                            }
+                        }
+                    }
+                }
+                EffectKind::Well => {
+                    for i in self.near(content, e.pos, e.radius + 40) {
+                        let f = &mut self.foes[i];
+                        if f.hp > 0 && within(f.pos, e.pos, px(e.radius)) {
+                            let to = e.pos.sub(f.pos);
+                            f.push = f.push.add(to.with_len(per_tick(e.pull.max(40))).scale(1, 4));
+                        }
+                    }
+                    e.cd -= 1;
+                    if e.cd <= 0 {
+                        e.cd = e.every;
+                        let inside: Vec<usize> = self
+                            .near(content, e.pos, e.radius + 40)
+                            .into_iter()
+                            .filter(|&i| self.foes[i].hp > 0 && within(self.foes[i].pos, e.pos, px(e.radius)))
+                            .collect();
+                        for i in inside {
+                            let at = self.foes[i].pos;
+                            let killed = self.hurt_foe(content, i, e.damage, e.seat, &e.ability, V::ZERO);
+                            self.spring_carry(content, e.seat, &mut e.carry, On::Hit, at);
+                            if killed {
+                                self.spring_carry(content, e.seat, &mut e.carry, On::Kill, at);
+                            }
+                        }
+                    }
+                }
+                EffectKind::Bomb | EffectKind::Strike => {
+                    let trigger = e.kind == EffectKind::Bomb
+                        && e.armed
                         && self.foes.iter().any(|f| {
                             f.hp > 0
                                 && within(f.pos, e.pos, px(e.radius / 2 + content.enemies[f.kind].radius))
                         });
                     if trigger || e.life <= 0 {
+                        let mut first: Option<(V, bool)> = None;
                         for i in self.near(content, e.pos, e.radius + 40) {
                             let f = &self.foes[i];
                             let r = content.enemies[f.kind].radius;
-                            if within(f.pos, e.pos, px(e.radius + r)) {
+                            if f.hp > 0 && within(f.pos, e.pos, px(e.radius + r)) {
+                                let at = f.pos;
                                 let to = f.pos.sub(e.pos).with_len(per_tick(content.run.knockback * 2));
-                                self.hurt_foe(content, i, e.damage, e.seat, &e.ability, to);
+                                let to = if e.pull > 0 { V::ZERO.sub(to) } else { to };
+                                if e.slow_pct > 0 {
+                                    self.foes[i].slow = self.foes[i].slow.max(e.slow);
+                                    self.foes[i].slow_pct = self.foes[i].slow_pct.max(e.slow_pct);
+                                }
+                                let killed = self.hurt_foe(content, i, e.damage, e.seat, &e.ability, to);
+                                if first.is_none() || (killed && !first.map(|f| f.1).unwrap_or(false)) {
+                                    first = Some((at, killed));
+                                }
                             }
                         }
+                        if let Some(fk) = e.field {
+                            self.add_field(content, fk, e.pos, e.radius, e.damage, e.seat);
+                        }
+                        let at = e.pos;
+                        let ability = e.ability.clone();
+                        self.ending(content, e.seat, &ability, at, e.damage, e.burst_pct);
+                        if let Some((p, killed)) = first {
+                            self.spring_carry(content, e.seat, &mut e.carry, On::Hit, p);
+                            if killed {
+                                self.spring_carry(content, e.seat, &mut e.carry, On::Kill, p);
+                            }
+                        }
+                        self.spring_carry(content, e.seat, &mut e.carry, On::Expire, at);
                         let boom = Effect {
                             kind: EffectKind::Ring,
                             life: ticks(220),
                             full: ticks(220),
+                            anchored: true,
+                            carry: None,
                             ..e.clone()
                         };
                         self.effects[k] = boom;
@@ -584,7 +958,9 @@ impl World {
                     }
                 }
                 EffectKind::Orbit => {
-                    e.pos = owner.0;
+                    if !e.anchored {
+                        e.pos = owner.0;
+                    }
                     e.angle += e.spin.max(1);
                     if !owner.1 {
                         e.life = 0;
@@ -609,7 +985,8 @@ impl World {
                     }
                     for (id, i, away) in struck {
                         e.hits.push((id, now + ticks(500) as u32));
-                        self.hurt_foe(
+                        let at = self.foes[i].pos;
+                        let killed = self.hurt_foe(
                             content,
                             i,
                             e.damage,
@@ -617,6 +994,10 @@ impl World {
                             &e.ability,
                             away.with_len(per_tick(200)),
                         );
+                        self.spring_carry(content, e.seat, &mut e.carry, On::Hit, at);
+                        if killed {
+                            self.spring_carry(content, e.seat, &mut e.carry, On::Kill, at);
+                        }
                     }
                 }
                 EffectKind::Turret => {
@@ -627,24 +1008,15 @@ impl World {
                             let vel = self.foes[i].pos.sub(e.pos).with_len(e.shot_speed);
                             let life = (px(e.shot_range) / e.shot_speed.max(1)).max(1);
                             let ability = e.ability.clone();
-                            self.add_shot(
-                                content,
-                                e.seat,
-                                &ability,
-                                e.pos,
-                                vel,
-                                e.damage,
-                                e.shot_radius,
-                                1,
-                                0,
-                                false,
-                                life,
-                            );
+                            let s = Scaled::for_turret_shot(&e);
+                            self.add_shot(content, e.seat, &ability, e.pos, vel, &s, life);
                         }
                     }
                 }
             }
             if e.life <= 0 {
+                let at = e.pos;
+                self.spring_carry(content, e.seat, &mut e.carry, On::Expire, at);
                 self.effects.remove(k);
             } else {
                 self.effects[k] = e;
@@ -679,6 +1051,7 @@ impl World {
         let into = def.evolution.clone();
         let old = def.id.clone();
         self.effects.retain(|e| !(e.seat == seat && e.ability == old));
+        self.rename_token(seat, &old, &into);
         let p = &mut self.players[seat];
         p.abilities[slot] = crate::world::Slot {
             id: into.clone(),

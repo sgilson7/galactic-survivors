@@ -1,0 +1,69 @@
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage{xcolor}
+\definecolor{acid}{HTML}{B8E04A}
+\definecolor{amber}{HTML}{FFB23E}
+\definecolor{badge}{HTML}{262238}
+\definecolor{badgehi}{HTML}{3A3454}
+\definecolor{coral}{HTML}{FF7B66}
+\definecolor{crystal}{HTML}{6E8FB0}
+\definecolor{faunateal}{HTML}{3B8C88}
+\definecolor{faunatealhi}{HTML}{5BB3A9}
+\definecolor{flesh}{HTML}{C98FA8}
+\definecolor{gold}{HTML}{FFC93C}
+\definecolor{goldhi}{HTML}{FFE9A0}
+\definecolor{ground}{HTML}{2D2939}
+\definecolor{groundB}{HTML}{322E40}
+\definecolor{groundC}{HTML}{29253A}
+\definecolor{gunmetal}{HTML}{565D6C}
+\definecolor{gunmetaldark}{HTML}{383D49}
+\definecolor{hazard}{HTML}{F2C230}
+\definecolor{haze}{HTML}{6B4473}
+\definecolor{heal}{HTML}{FF5C70}
+\definecolor{ink}{HTML}{14111C}
+\definecolor{moon}{HTML}{B9A8C9}
+\definecolor{offwhite}{HTML}{E3DFD0}
+\definecolor{olive}{HTML}{7D8740}
+\definecolor{olivehi}{HTML}{A2AD5A}
+\definecolor{pebble}{HTML}{3B3650}
+\definecolor{rift}{HTML}{7F45E8}
+\definecolor{rifthi}{HTML}{D3B1FF}
+\definecolor{rock}{HTML}{4B4562}
+\definecolor{rockdark}{HTML}{36314A}
+\definecolor{rockhi}{HTML}{5D5677}
+\definecolor{sensor}{HTML}{FF4A5C}
+\definecolor{shadow}{HTML}{1D1A28}
+\definecolor{shot}{HTML}{FF3DCF}
+\definecolor{shothi}{HTML}{FFC4F1}
+\definecolor{sky}{HTML}{2A2245}
+\definecolor{skyhi}{HTML}{1E1A33}
+\definecolor{skylow}{HTML}{4A3260}
+\definecolor{suit}{HTML}{F2F5F7}
+\definecolor{suitshade}{HTML}{BFCBD6}
+\definecolor{teal}{HTML}{33D1BF}
+\definecolor{ticket}{HTML}{B48CFF}
+\definecolor{violet}{HTML}{8462B8}
+\definecolor{violetdark}{HTML}{5B4284}
+\definecolor{violethi}{HTML}{A68AD6}
+\definecolor{visor}{HTML}{1D2B3E}
+\definecolor{visorhi}{HTML}{9DE6F4}
+\definecolor{weakspot}{HTML}{E8F25A}
+\definecolor{xp}{HTML}{4FEFFF}
+\definecolor{xphi}{HTML}{D2FBFF}
+\newlength{\Ink}\setlength{\Ink}{2.2pt}
+\tikzset{inked/.style={draw=ink,line width=\Ink,line join=round,line cap=round}}
+\begin{document}
+\begin{tikzpicture}
+\useasboundingbox (0,0) rectangle (2,2);
+\clip (0,0) rectangle (2,2);
+\filldraw[inked,fill=gunmetal] plot[smooth cycle, tension=0.6] coordinates {(1.81,0.712) (1.645,0.919) (1.421,1.117) (1,1.139) (0.595,1.102) (0.369,0.914) (0.174,0.712) (0.327,0.496) (0.595,0.322) (1,0.293) (1.425,0.303) (1.659,0.5)};
+\draw[draw=ink,line width=6.193pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(0.75,0.972) (0.683,0.955) (0.622,0.933) (0.568,0.906) (0.522,0.874) (0.486,0.839) (0.46,0.801) (0.445,0.761) (0.442,0.721) (0.451,0.681) (0.47,0.642)};
+\draw[draw=violethi,line width=1.793pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(0.75,0.972) (0.683,0.955) (0.622,0.933) (0.568,0.906) (0.522,0.874) (0.486,0.839) (0.46,0.801) (0.445,0.761) (0.442,0.721) (0.451,0.681) (0.47,0.642)};
+\draw[draw=ink,line width=6.193pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(0.851,0.915) (0.799,0.908) (0.749,0.896) (0.704,0.88) (0.664,0.861) (0.63,0.838) (0.603,0.812) (0.583,0.785) (0.571,0.756) (0.568,0.727) (0.573,0.697)};
+\draw[draw=teal,line width=1.793pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(0.851,0.915) (0.799,0.908) (0.749,0.896) (0.704,0.88) (0.664,0.861) (0.63,0.838) (0.603,0.812) (0.583,0.785) (0.571,0.756) (0.568,0.727) (0.573,0.697)};
+\draw[draw=ink,line width=6.193pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.315,0.462) (1.367,0.481) (1.414,0.504) (1.454,0.531) (1.487,0.56) (1.513,0.591) (1.53,0.625) (1.539,0.659) (1.539,0.693) (1.53,0.727) (1.513,0.761)};
+\draw[draw=acid,line width=1.793pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.315,0.462) (1.367,0.481) (1.414,0.504) (1.454,0.531) (1.487,0.56) (1.513,0.591) (1.53,0.625) (1.539,0.659) (1.539,0.693) (1.53,0.727) (1.513,0.761)};
+\draw[draw=ink,line width=6.193pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.201,0.509) (1.242,0.519) (1.28,0.532) (1.315,0.548) (1.345,0.566) (1.371,0.587) (1.39,0.609) (1.404,0.633) (1.412,0.657) (1.414,0.682) (1.409,0.707)};
+\draw[draw=violethi,line width=1.793pt,line cap=round,line join=round] plot[smooth, tension=0.6] coordinates {(1.201,0.509) (1.242,0.519) (1.28,0.532) (1.315,0.548) (1.345,0.566) (1.371,0.587) (1.39,0.609) (1.404,0.633) (1.412,0.657) (1.414,0.682) (1.409,0.707)};
+\filldraw[inked,fill=violethi] (0.622,0.892) ellipse (0.09 and 0.045);
+\end{tikzpicture}
+\end{document}

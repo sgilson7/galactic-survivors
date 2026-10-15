@@ -26,6 +26,7 @@ pub const BITS: &[(&str, u32)] = &[
     ("reroll", 256),
     ("pause", 512),
     ("inspect", 1024),
+    ("rigs", 2048),
 ];
 
 /// Frames the partner glides for after a correction.
@@ -142,6 +143,10 @@ pub struct Game {
     /// The codex is showing, on its screen or over a run (T10).
     pub codex_open: bool,
     pub codex_tab: String,
+    /// The rig window is open over the run, which keeps going (T15).
+    pub rigs_open: bool,
+    /// The token picked up in the rig window, waiting for a place.
+    pub rig_pick: Option<crate::rig::Spot>,
     /// The gear piece chosen on the gear screen, 0 for none.
     pub gear_pick: u32,
     /// The achievement chosen on the grid.
@@ -188,6 +193,8 @@ impl Game {
             codex_open: false,
             codex_tab: "abilities".into(),
             gear_pick: 0,
+            rigs_open: false,
+            rig_pick: None,
             ach_pick: String::new(),
             payout: None,
             pulls: Vec::new(),
@@ -284,6 +291,10 @@ impl Game {
         }
         if pressed & (bit("pause") | bit("inspect")) != 0 {
             self.toggle_overlay();
+        }
+        if pressed & bit("rigs") != 0 {
+            self.rigs_open = !self.rigs_open;
+            self.rig_pick = None;
         }
         let tick_bits = self.clock.frame(now_us, raw.bits);
         let local_offer = self
@@ -416,6 +427,28 @@ impl Game {
         self.codex_open = false;
     }
 
+    /// The rig window's click: pick up a token, put it down somewhere
+    /// else (a swap, made on the next tick), or drop the pick.
+    fn pick_spot(&mut self, spot: crate::rig::Spot) {
+        use crate::rig::Spot;
+        let Some(w) = self.world.as_ref() else { return };
+        let p = &w.players[self.seat.min(w.players.len() - 1)];
+        let held = match spot {
+            Spot::Socket(r, s) => p.rigs.get(r).and_then(|r| r.sockets.get(s)).cloned(),
+            Spot::Spare(k) => p.spare.get(k).cloned(),
+        }
+        .unwrap_or_default();
+        self.rig_pick = match self.rig_pick {
+            None if held.is_empty() => None,
+            None => Some(spot),
+            Some(from) if from == spot => None,
+            Some(from) => {
+                self.pending_rig = crate::rig::pack_move(from, spot);
+                None
+            }
+        };
+    }
+
     pub fn overlay_open(&self) -> bool {
         self.paused || self.inspect
     }
@@ -459,6 +492,8 @@ impl Game {
         self.codex_open = false;
         self.pending_card = 0;
         self.pending_rig = 0;
+        self.rigs_open = false;
+        self.rig_pick = None;
         self.partner_drawn = None;
         self.payout = None;
     }
@@ -699,6 +734,19 @@ impl Game {
                 self.pending_card = if name == "card.take" { k } else { k + 3 };
             }
             "card.reroll" => self.pending_card = CARD_REROLL,
+            "rig.open" => {
+                self.rigs_open = self.world.is_some();
+                self.rig_pick = None;
+            }
+            "rig.close" => {
+                self.rigs_open = false;
+                self.rig_pick = None;
+            }
+            "rig.pick" => {
+                let spot =
+                    crate::rig::Spot::parse(value).ok_or_else(|| format!("No rig place \"{value}\"."))?;
+                self.pick_spot(spot);
+            }
             "shop.buy" => self
                 .save
                 .buy_rank(&self.content, value)
@@ -861,9 +909,19 @@ pub mod tests {
                 ..Raw::default()
             };
             host.advance(f * 16_667, raw);
-            join.advance(f * 16_667 + 3_000, Raw { bits: if (f / 25) % 2 == 0 { 4 } else { 1 }, ..Raw::default() });
+            join.advance(
+                f * 16_667 + 3_000,
+                Raw {
+                    bits: if (f / 25) % 2 == 0 { 4 } else { 1 },
+                    ..Raw::default()
+                },
+            );
             for g in [&mut host, &mut join] {
-                if g.world.as_ref().map(|w| w.players[g.seat].offer.is_some()).unwrap_or(false) {
+                if g.world
+                    .as_ref()
+                    .map(|w| w.players[g.seat].offer.is_some())
+                    .unwrap_or(false)
+                {
                     g.act("card.take", "1").unwrap();
                 }
             }
@@ -920,6 +978,38 @@ pub mod tests {
             "own input showed within four frames (DELAY {})",
             online::DELAY
         );
+    }
+
+    #[test]
+    fn the_rig_window_moves_a_part_by_two_clicks_while_the_run_goes_on() {
+        let mut g = game();
+        g.act("run.start", "").unwrap();
+        g.world.as_mut().unwrap().players[0].spare.push("ignite".into());
+        g.act("rig.open", "").unwrap();
+        let ui = crate::view::build(&g);
+        let overlay = ui.overlay.expect("the rig window");
+        assert_eq!(overlay.id, "rigs");
+        assert!(overlay
+            .items
+            .iter()
+            .any(|i| i.id == "rig-x0" && i.title == g.text.name("ignite")));
+        // pick up the spare Ignite, put it before the Seeker Rifle's socket
+        g.act("rig.pick", "x0").unwrap();
+        assert!(g.rig_pick.is_some());
+        g.act("rig.pick", "r0s1").unwrap();
+        assert!(g.rig_pick.is_none());
+        let t = g.world.as_ref().unwrap().tick;
+        for f in 0..4 {
+            g.advance(f * 16_667, Raw::default());
+        }
+        let w = g.world.as_ref().unwrap();
+        assert!(w.tick > t, "the run kept going with the window open");
+        assert_eq!(w.players[0].rigs[0].sockets[1], "ignite");
+        assert!(w.players[0].spare.is_empty());
+        // clicking an empty place picks nothing up
+        g.act("rig.pick", "r1s0").unwrap();
+        assert!(g.rig_pick.is_none());
+        assert!(g.act("rig.pick", "nowhere").is_err());
     }
 
     #[test]

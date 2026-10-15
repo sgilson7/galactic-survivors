@@ -59,6 +59,7 @@ impl World {
                 });
             }
         }
+        // parts are drawn on their own (`draw_cards`); see `part_pool`
         if p.passives.len() < content.run.passive_slots {
             for d in &content.passives {
                 if !p.passives.iter().any(|s| s.id == d.id) && !p.banished.contains(&d.id) {
@@ -73,6 +74,22 @@ impl World {
         pool
     }
 
+    /// Every part this player could be offered: the common ones, and the
+    /// rare ones their save has opened (T15).
+    pub fn part_pool(&self, content: &Content, seat: usize) -> Vec<Card> {
+        let p = &self.players[seat];
+        content
+            .parts
+            .iter()
+            .filter(|d| !p.banished.contains(&d.id) && !p.load.locked.contains(&d.id))
+            .map(|d| Card {
+                kind: CardKind::Part,
+                id: d.id.clone(),
+                level: 1,
+            })
+            .collect()
+    }
+
     fn draw_cards(&mut self, content: &Content, seat: usize, keep: &[Card]) -> Vec<Card> {
         let mut pool: Vec<Card> = self
             .card_pool(content, seat)
@@ -80,6 +97,35 @@ impl World {
             .filter(|c| !keep.iter().any(|k| k.id == c.id))
             .collect();
         let mut hand = keep.to_vec();
+        // one card raises something already held, when one can: with many
+        // more abilities, passives and parts (T14, T15) a held ability's next
+        // level was rarely offered and evolutions all but stopped
+        if hand.len() < content.run.card_count && self.rng.chance(content.run.up_card_pct, 100) {
+            let ups: Vec<usize> = pool
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| matches!(c.kind, CardKind::AbilityUp | CardKind::PassiveUp))
+                .map(|(k, _)| k)
+                .collect();
+            if !ups.is_empty() {
+                let k = ups[self.rng.below(ups.len() as u32) as usize];
+                hand.push(pool.remove(k));
+            }
+        }
+        // at most one part a hand, part_card_pct of the time
+        let parts: Vec<Card> = self
+            .part_pool(content, seat)
+            .into_iter()
+            .filter(|c| !keep.iter().any(|k| k.id == c.id))
+            .collect();
+        if !parts.is_empty()
+            && hand.len() < content.run.card_count
+            && !keep.iter().any(|k| k.kind == CardKind::Part)
+            && self.rng.chance(content.run.part_card_pct, 100)
+        {
+            let k = self.rng.below(parts.len() as u32) as usize;
+            hand.push(parts[k].clone());
+        }
         while hand.len() < content.run.card_count && !pool.is_empty() {
             let k = self.rng.below(pool.len() as u32) as usize;
             hand.push(pool.remove(k));
@@ -218,6 +264,7 @@ impl World {
                     level: start,
                     cd: 30,
                 });
+                self.place_ability(content, seat, &card.id);
             }
             CardKind::AbilityUp => {
                 if let Some(s) = self.players[seat].abilities.iter_mut().find(|s| s.id == card.id) {
@@ -231,12 +278,14 @@ impl World {
                     cd: 0,
                 });
                 self.after_passive(content, seat);
+                self.fit_rigs(content, seat);
             }
             CardKind::PassiveUp => {
                 if let Some(s) = self.players[seat].passives.iter_mut().find(|s| s.id == card.id) {
                     s.level = card.level;
                 }
                 self.after_passive(content, seat);
+                self.fit_rigs(content, seat);
             }
             CardKind::Gold => self.players[seat].record.gold += content.run.gold_chip * 5,
             CardKind::Evolve => {
@@ -252,6 +301,7 @@ impl World {
                 }
             }
             CardKind::Salvage => self.players[seat].record.gold += card.level,
+            CardKind::Part => self.place_part(content, seat, &card.id),
         }
     }
 

@@ -2,8 +2,8 @@
   {
     "name": "an enemy crowd lands many hits",
     "file": "crates/core/src/world.rs",
-    "find": "if !p.alive || p.invulnerable > 0 {",
-    "replace": "if !p.alive {",
+    "find": "if !p.alive || p.invulnerable > 0 || p.guard > 0 {",
+    "replace": "if !p.alive || p.guard > 0 {",
     "test": "a_crowd_touching_the_player_in_one_tick_deals_one_hit"
   },
   {
@@ -397,5 +397,159 @@
     "find": "!self.coop && self.players.iter().any(|p| p.offer.is_some())",
     "replace": "false",
     "test": "a_solo_run_waits_while_a_card_is_open"
+  },
+  {
+    "name": "a rig reads right to left",
+    "file": "crates/core/src/rig.rs",
+    "find": "for (k, tok) in program.iter().enumerate() {",
+    "replace": "for (k, tok) in program.iter().enumerate().rev() {",
+    "test": "a_rig_reads_left_to_right_so_a_modifier_after_its_payload_does_nothing"
+  },
+  {
+    "name": "a ring fires one copy",
+    "file": "crates/core/src/rig.rs",
+    "find": "            Arrange::Ring => (0..n)",
+    "replace": "            Arrange::Ring => (0..1)",
+    "test": "a_ring_fires_six_copies_and_twin_fires_two"
+  },
+  {
+    "name": "an instant hit never sets off its trigger",
+    "file": "crates/core/src/rig.rs",
+    "find": "On::Hit => m.log.first().map(|(p, _)| *p),",
+    "replace": "On::Hit => None,",
+    "test": "on_hit_fires_the_rest_of_the_rig_where_the_payload_hit"
+  },
+  {
+    "name": "triggers nest without limit",
+    "file": "crates/core/src/rig.rs",
+    "find": "if depth < MAX_DEPTH && k + 1 < program.len() {",
+    "replace": "if k + 1 < program.len() {",
+    "test": "triggers_nest_at_most_three_deep"
+  },
+  {
+    "name": "parts add no load",
+    "file": "crates/core/src/rig.rs",
+    "find": ".map(|p| p.load_pct)\n            .sum();",
+    "replace": ".map(|p| p.load_pct * 0)\n            .sum();",
+    "test": "every_part_adds_its_load_to_the_recharge"
+  },
+  {
+    "name": "a new modifier goes to the spare parts",
+    "file": "crates/core/src/rig.rs",
+    "find": "if kind != PartKind::Trigger {",
+    "replace": "if false {",
+    "test": "a_new_part_goes_where_it_works_and_a_trigger_to_the_spare_parts"
+  },
+  {
+    "name": "a rig move in the input is ignored",
+    "file": "crates/core/src/world.rs",
+    "find": "if mv != 0 && self.players[seat].alive {",
+    "replace": "if false {",
+    "test": "a_rig_move_swaps_two_places_and_reaches_the_world_as_an_input"
+  },
+  {
+    "name": "a stride forgets the rest",
+    "file": "crates/core/src/rig.rs",
+    "find": "rig.stride -= t.stride_px;",
+    "replace": "rig.stride = 0;",
+    "test": "each_stride_fires_the_rest_of_the_rig_by_distance_walked"
+  },
+  {
+    "name": "the wake mine drops standing still",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "if from.player && !p.moving {\n                    return None;\n                }",
+    "replace": "",
+    "test": "the_wake_mine_drops_only_while_moving_and_behind_the_player"
+  },
+  {
+    "name": "echo never fires again",
+    "file": "crates/core/src/rig.rs",
+    "find": "if mods.echo_ms > 0 && depth < MAX_DEPTH {",
+    "replace": "if false {",
+    "test": "echo_fires_its_payload_again_a_second_later"
+  },
+  {
+    "name": "an evolution leaves its rig",
+    "file": "crates/core/src/arsenal.rs",
+    "find": "        self.rename_token(seat, &old, &into);\n",
+    "replace": "",
+    "test": "an_evolution_keeps_its_place_in_the_rig"
+  },
+  {
+    "name": "a triangle reads as a square",
+    "file": "crates/core/src/rune.rs",
+    "find": "3 => Some(Shape::Triangle),",
+    "replace": "3 => Some(Shape::Square),",
+    "test": "walking_a_triangle_draws_a_rune_that_strikes_what_is_inside"
+  },
+  {
+    "name": "a rune strikes outside its loop",
+    "file": "crates/core/src/rune.rs",
+    "find": ".filter(|&i| self.foes[i].hp > 0 && inside(ring, whole(self.foes[i].pos)))",
+    "replace": ".filter(|&i| self.foes[i].hp > 0)",
+    "test": "walking_a_triangle_draws_a_rune_that_strikes_what_is_inside"
+  },
+  {
+    "name": "rune stacks have no limit",
+    "file": "crates/core/src/rune.rs",
+    "find": "while p.rune_stacks.iter().filter(|s| s.shape == shape).count() as i32 > most {",
+    "replace": "while false {",
+    "test": "rune_stacks_hold_at_most_the_limit_and_wear_off"
+  },
+  {
+    "name": "on rune never fires",
+    "file": "crates/core/src/rig.rs",
+    "find": "On::Rune => at = p.rune_at,",
+    "replace": "On::Rune => {}",
+    "test": "on_rune_fires_the_rest_at_the_rune_centre"
+  },
+  {
+    "name": "a rare part is offered unopened",
+    "file": "crates/core/src/offer.rs",
+    "find": ".filter(|d| !p.banished.contains(&d.id) && !p.load.locked.contains(&d.id))",
+    "replace": ".filter(|d| !p.banished.contains(&d.id))",
+    "test": "a_part_card_can_be_offered_and_a_rare_part_only_once_opened"
+  },
+  {
+    "name": "fields of a kind stack",
+    "file": "crates/core/src/field.rs",
+    "find": "(a, b) if a == b && within(f.pos, pos, px(f.radius)) => {",
+    "replace": "(a, b) if false && a == b => {",
+    "test": "a_field_on_its_own_kind_merges_instead_of_stacking"
+  },
+  {
+    "name": "a flare is no bigger than the fire",
+    "file": "crates/core/src/field.rs",
+    "find": "let burst = (fire_dmg * content.fields.flare_pct / 100).max(1);",
+    "replace": "let burst = fire_dmg;",
+    "test": "fire_on_slick_flares_and_the_slick_burns"
+  },
+  {
+    "name": "steam forms one way round",
+    "file": "crates/core/src/field.rs",
+    "find": "(FieldKind::Fire, FieldKind::Frost) | (FieldKind::Frost, FieldKind::Fire) => {",
+    "replace": "(FieldKind::Fire, FieldKind::Frost) => {",
+    "test": "fire_meeting_frost_makes_steam_either_way_round"
+  },
+  {
+    "name": "fields have no cap",
+    "file": "crates/core/src/field.rs",
+    "find": "if self.fields.len() >= content.fields.cap.max(1) {",
+    "replace": "if false {",
+    "test": "there_are_never_more_fields_than_the_cap"
+  },
+  {
+    "name": "fire does not burn",
+    "file": "crates/core/src/field.rs",
+    "find": "                FieldKind::Fire => {\n                    self.strike_area(content, at, r, dmg, seat);\n                }",
+    "replace": "                FieldKind::Fire => {}",
+    "test": "a_fire_field_burns_what_stands_in_it_and_not_what_stands_outside"
+  },
+  {
+    "name": "the cache never gives a part",
+    "file": "crates/core/src/meta.rs",
+    "find": "if rarity == Rarity::Epic && !closed.is_empty() && self.rng.chance(content.cache.part_pct, 100) {",
+    "replace": "if false {",
+    "test": "an_epic_pull_can_open_a_rare_part_once_and_it_joins_the_cards"
   }
 ]

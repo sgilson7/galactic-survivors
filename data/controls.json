@@ -10,5 +10,6 @@
   "Digit3": "card3", "Numpad3": "card3",
   "KeyR": "reroll",
   "Escape": "pause", "KeyP": "pause",
-  "KeyI": "inspect", "KeyB": "inspect"
+  "KeyI": "inspect", "KeyB": "inspect",
+  "KeyE": "rigs"
 }

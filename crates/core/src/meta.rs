@@ -56,6 +56,9 @@ pub struct Save {
     pub rng: Rng,
     pub settings: Settings,
     pub character: String,
+    /// Rare parts pulled from the salvage cache (T15).
+    #[serde(default)]
+    pub parts: Vec<String>,
 }
 
 /// What a finished run paid, for the results screen.
@@ -77,6 +80,9 @@ pub struct Pull {
     pub rarity: Rarity,
     pub rank: i32,
     pub new: bool,
+    /// A rare part for rigs rather than a module.
+    #[serde(default)]
+    pub part: bool,
 }
 
 impl Save {
@@ -104,6 +110,7 @@ impl Save {
             rng: Rng::new(seed ^ 0x5eed_ca5e),
             settings: Settings::default(),
             character: content.characters[0].id.clone(),
+            parts: Vec::new(),
         }
     }
 
@@ -237,6 +244,17 @@ impl Save {
     /// Whether `kind:id` is still locked: some achievement unlocks it and
     /// that achievement is not earned.
     pub fn locked(&self, content: &Content, kind: &str, id: &str) -> bool {
+        if kind == "part" {
+            // a rare part opens by its achievement or from the salvage cache
+            let rare = content.part(id).map(|p| p.rare).unwrap_or(false);
+            if !rare || self.parts.iter().any(|p| p == id) {
+                return false;
+            }
+            return content
+                .unlocked_by(kind, id)
+                .map(|a| !self.claimed.contains(&a.id))
+                .unwrap_or(true);
+        }
         content
             .unlocked_by(kind, id)
             .map(|a| !self.claimed.contains(&a.id))
@@ -311,6 +329,13 @@ impl Save {
                     .filter(|e| self.locked(content, "evolution", &e.id)),
             )
             .map(|a| a.id.clone())
+            .chain(
+                content
+                    .parts
+                    .iter()
+                    .filter(|p| self.locked(content, "part", &p.id))
+                    .map(|p| p.id.clone()),
+            )
             .collect();
         Loadout {
             character: character.to_string(),
@@ -469,6 +494,13 @@ impl Save {
         self.best_stat("best_full_slots", (p.abilities.len() + p.passives.len()) as u64);
         self.low_stat("fastest_evolve_s", (p.record.first_evolve / tps) as u64);
         self.add_stat("rifts", world.rifts_cleared as u64);
+        let runes: u32 = p.record.runes.values().sum();
+        self.add_stat("runes", runes as u64);
+        self.best_stat("best_runes", runes as u64);
+        self.best_stat("best_field_kills", p.record.field_kills as u64);
+        self.best_stat("best_reactions", p.record.reactions as u64);
+        self.best_stat("best_trigger_depth", p.record.deepest_trigger as u64);
+        self.best_stat("best_rig_parts", p.record.fullest_rig as u64);
         self.add_stat("evolutions", p.record.evolved.len() as u64);
         for (ability, n) in &p.record.kills_by {
             self.best_stat(&format!("best_kills.{ability}"), *n as u64);
@@ -577,6 +609,27 @@ impl Save {
             } else {
                 self.pity_epic + 1
             };
+            // an epic pull may be a rare part not yet opened (T15)
+            let closed: Vec<String> = content
+                .parts
+                .iter()
+                .filter(|p| self.locked(content, "part", &p.id))
+                .map(|p| p.id.clone())
+                .collect();
+            if rarity == Rarity::Epic && !closed.is_empty() && self.rng.chance(content.cache.part_pct, 100) {
+                let id = closed[self.rng.below(closed.len() as u32) as usize].clone();
+                self.parts.push(id.clone());
+                self.add_stat("pulls", 1);
+                self.add_stat("epic_pulls", 1);
+                out.push(Pull {
+                    id,
+                    rarity,
+                    rank: 0,
+                    new: true,
+                    part: true,
+                });
+                continue;
+            }
             let pool: Vec<&str> = content
                 .modules
                 .iter()
@@ -595,6 +648,7 @@ impl Save {
                 rarity,
                 rank: 1,
                 new,
+                part: false,
             });
         }
         self.count_owned();
@@ -978,8 +1032,42 @@ mod tests {
                 .map(|a| a.tickets)
                 .sum();
             assert_eq!(s.tickets, back);
-            assert_eq!(s.modules.len(), 10, "every pull is its own piece");
+            assert_eq!(
+                s.modules.len() + s.parts.len(),
+                10,
+                "every pull is its own piece or a rare part"
+            );
         }
+    }
+
+    #[test]
+    fn an_epic_pull_can_open_a_rare_part_once_and_it_joins_the_cards() {
+        let c = shipped();
+        let rare: Vec<&str> = c.parts.iter().filter(|p| p.rare).map(|p| p.id.as_str()).collect();
+        let mut s = Save::new(&c, 9);
+        s.tickets = 100_000;
+        for _ in 0..400 {
+            s.pull(&c, 10).unwrap();
+        }
+        // every rare part was pulled, none twice
+        let mut got = s.parts.clone();
+        got.sort();
+        let mut want: Vec<String> = rare.iter().map(|r| r.to_string()).collect();
+        want.sort();
+        assert_eq!(got, want);
+        let load = s.loadout(&c, "pathfinder");
+        for r in rare {
+            assert!(!load.locked.iter().any(|l| l == r), "{r} is offered once pulled");
+        }
+        let fresh = Save::new(&c, 9).loadout(&c, "pathfinder");
+        assert!(
+            fresh.locked.iter().any(|l| l == "overcharge"),
+            "a new save has not opened it"
+        );
+        assert!(
+            !fresh.locked.iter().any(|l| l == "ignite"),
+            "a common part is never locked"
+        );
     }
 
     #[test]

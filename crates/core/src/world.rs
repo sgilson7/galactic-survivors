@@ -16,6 +16,11 @@ pub const SEATS: usize = 2;
 /// Size of a collision cell, in pixels.
 const CELL_PX: i32 = 128;
 
+/// Momentum counts at most this many seconds of moving (T14).
+pub const MOMENTUM_SECONDS: i32 = 4;
+/// Anchor needs this many ticks standing still.
+pub const ANCHOR_TICKS: i32 = 30;
+
 /// One seat's input for one tick. Directions are in -127..=127 on each axis.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Input {
@@ -77,6 +82,23 @@ pub struct Stats {
     pub shield_s: i32,
     pub rift_tickets: i32,
     pub xp_pct: i32,
+    // passives added for rigs and runes (T14)
+    #[serde(default)]
+    pub momentum_pct: i32,
+    #[serde(default)]
+    pub anchor_pct: i32,
+    #[serde(default)]
+    pub rune_level: i32,
+    #[serde(default)]
+    pub heat_sink_pct: i32,
+    #[serde(default)]
+    pub double_tap: i32,
+    #[serde(default)]
+    pub fuse_area_pct: i32,
+    #[serde(default)]
+    pub sockets: i32,
+    #[serde(default)]
+    pub formation_extra: i32,
 }
 
 impl Stats {
@@ -98,6 +120,14 @@ impl Stats {
             "shield_s" => &mut self.shield_s,
             "rift_tickets" => &mut self.rift_tickets,
             "xp_pct" => &mut self.xp_pct,
+            "momentum_pct" => &mut self.momentum_pct,
+            "anchor_pct" => &mut self.anchor_pct,
+            "rune_level" => &mut self.rune_level,
+            "heat_sink_pct" => &mut self.heat_sink_pct,
+            "double_tap" => &mut self.double_tap,
+            "fuse_area_pct" => &mut self.fuse_area_pct,
+            "sockets" => &mut self.sockets,
+            "formation_extra" => &mut self.formation_extra,
             _ => return,
         };
         *field += v;
@@ -133,6 +163,8 @@ pub enum CardKind {
     Evolve,
     Heal,
     Salvage,
+    /// A part for a rig (T15).
+    Part,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +206,44 @@ pub struct Record {
     pub evolved: Vec<String>,
     pub gold: i32,
     pub tickets: i32,
+    /// Runes drawn, by shape (T14).
+    #[serde(default)]
+    pub runes: BTreeMap<String, u32>,
+    /// Enemies defeated by ground fields.
+    #[serde(default)]
+    pub field_kills: u32,
+    /// Fields that met and reacted.
+    #[serde(default)]
+    pub reactions: u32,
+    /// The deepest a trigger fired: 1 for a trigger on a rig's payload.
+    #[serde(default)]
+    pub deepest_trigger: u32,
+    /// The most parts in one rig that fired.
+    #[serde(default)]
+    pub fullest_rig: u32,
+}
+
+/// One rig (T15): a row of sockets read left to right whenever it fires.
+/// A socket holds an ability id, a part id, or "" for empty.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Rig {
+    pub sockets: Vec<String>,
+    pub cd: i32,
+    /// Times it has fired, for Double Tap.
+    pub fired: u32,
+    /// Distance walked toward the next stride trigger, and ticks toward the
+    /// next clock trigger.
+    pub stride: i32,
+    pub clock: i32,
+    /// Heat Sink's share of a tick, in hundredths.
+    pub heat: i32,
+}
+
+/// A rune's stacking passive, with the ticks it has left.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuneStack {
+    pub shape: crate::rune::Shape,
+    pub left: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,6 +283,29 @@ pub struct Player {
     /// The shield was given for the card open now, or not yet spent.
     #[serde(default)]
     pub guard_given: bool,
+    /// The rigs and the spare parts (T15).
+    #[serde(default)]
+    pub rigs: Vec<Rig>,
+    #[serde(default)]
+    pub spare: Vec<String>,
+    /// The walked trail, a point every few pixels, for runes (T14).
+    #[serde(default)]
+    pub trail: Vec<V>,
+    #[serde(default)]
+    pub rune_stacks: Vec<RuneStack>,
+    /// Ticks spent moving without a stop, and standing still.
+    #[serde(default)]
+    pub moving_ticks: i32,
+    #[serde(default)]
+    pub still_ticks: i32,
+    /// This tick's events, for player triggers: distance walked, a dash
+    /// begun, and the centre of a rune drawn.
+    #[serde(default)]
+    pub walked: i32,
+    #[serde(default)]
+    pub dashed: bool,
+    #[serde(default)]
+    pub rune_at: Option<V>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -250,6 +343,25 @@ pub struct Shot {
     pub homing: bool,
     pub life: i32,
     pub hit: Vec<u32>,
+    /// What a trigger after this payload fires, and when (T15).
+    #[serde(default)]
+    pub carry: Option<crate::rig::Carry>,
+    /// The ground field it leaves where it hits, and the burst where it ends.
+    #[serde(default)]
+    pub field: Option<crate::field::FieldKind>,
+    #[serde(default)]
+    pub burst_pct: i32,
+    /// A Boomerang Disc: turns for home halfway.
+    #[serde(default)]
+    pub returns: bool,
+    #[serde(default)]
+    pub full_life: i32,
+    #[serde(default)]
+    pub slow_pct: i32,
+    #[serde(default)]
+    pub slow: i32,
+    #[serde(default)]
+    pub pull: i32,
 }
 
 /// An enemy projectile. Every enemy shot has one shape on screen.
@@ -278,6 +390,12 @@ pub enum EffectKind {
     Orbit,
     /// A placed gun.
     Turret,
+    /// A marked point struck from orbit when its fuse runs out.
+    Strike,
+    /// A pit pulling enemies in.
+    Well,
+    /// A line from the player to the partner or a placed effect.
+    Tether,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -304,6 +422,22 @@ pub struct Effect {
     pub shot_speed: i32,
     pub shot_radius: i32,
     pub shot_range: i32,
+    /// Stays where it was made instead of following the player: anything
+    /// a trigger or a formation placed away from the player (T15).
+    #[serde(default)]
+    pub anchored: bool,
+    #[serde(default)]
+    pub carry: Option<crate::rig::Carry>,
+    #[serde(default)]
+    pub field: Option<crate::field::FieldKind>,
+    #[serde(default)]
+    pub burst_pct: i32,
+    #[serde(default)]
+    pub pull: i32,
+    #[serde(default)]
+    pub slow_pct: i32,
+    #[serde(default)]
+    pub slow: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -385,6 +519,16 @@ pub struct World {
     pub raid_survived: bool,
     pub coop: bool,
     pub rift_cleared_now: bool,
+    /// Ground fields (T14).
+    #[serde(default)]
+    pub fields: Vec<crate::field::Field>,
+    /// Payloads waiting to fire again (Echo).
+    #[serde(default)]
+    pub pending: Vec<crate::rig::Pending>,
+    /// While a payload fires: where it hurt a foe, and whether that foe fell
+    /// (for a trigger after an instant payload). Not part of the world.
+    #[serde(skip)]
+    pub hit_log: Option<Vec<(V, bool)>>,
     /// Collision cells: foe indices per cell, rebuilt each tick.
     #[serde(skip)]
     pub cells: Vec<Vec<u16>>,
@@ -455,6 +599,15 @@ impl World {
                 last_card: 0,
                 guard: 0,
                 guard_given: false,
+                rigs: Vec::new(),
+                spare: Vec::new(),
+                trail: Vec::new(),
+                rune_stacks: Vec::new(),
+                moving_ticks: 0,
+                still_ticks: 0,
+                walked: 0,
+                dashed: false,
+                rune_at: None,
             });
         }
         let mut w = World {
@@ -487,10 +640,17 @@ impl World {
             raid_survived: false,
             coop,
             rift_cleared_now: false,
+            fields: Vec::new(),
+            pending: Vec::new(),
+            hit_log: None,
             cells: Vec::new(),
         };
         for p in w.players.iter_mut() {
             p.shield_cd = shield_ticks(content, &p.load.stats);
+        }
+        for seat in 0..w.players.len() {
+            let starter = w.players[seat].abilities[0].id.clone();
+            w.place_ability(content, seat, &starter);
         }
         w
     }
@@ -536,6 +696,21 @@ impl World {
         if ch.trait_ == "extra_shot" {
             s.projectiles += ch.trait_levels.iter().filter(|l| self.level >= **l).count() as i32;
         }
+        // runes, Momentum and Anchor (T14)
+        let r = &content.runes;
+        for stack in &p.rune_stacks {
+            match stack.shape {
+                crate::rune::Shape::Circle => s.armor += r.circle_armor,
+                crate::rune::Shape::Triangle => s.damage_pct += r.triangle_damage_pct,
+                crate::rune::Shape::Square => s.area_pct += r.square_area_pct,
+            }
+        }
+        if s.momentum_pct > 0 {
+            s.damage_pct += s.momentum_pct * (p.moving_ticks / TPS).min(MOMENTUM_SECONDS);
+        }
+        if s.anchor_pct > 0 && p.still_ticks >= ANCHOR_TICKS {
+            s.area_pct += s.anchor_pct;
+        }
         s
     }
 
@@ -577,6 +752,7 @@ impl World {
         self.cast(content);
         self.move_shots(content);
         self.update_effects(content);
+        self.update_fields(content);
         self.move_bolts(content);
         self.contact(content);
         self.collect(content);
@@ -590,6 +766,13 @@ impl World {
     }
 
     fn read_cards(&mut self, content: &Content, inputs: &[Input]) {
+        // a move in the rig window, made on this tick (T15)
+        for seat in 0..self.players.len() {
+            let mv = inputs.get(seat).map(|i| i.rig).unwrap_or(0);
+            if mv != 0 && self.players[seat].alive {
+                self.rig_move(content, seat, mv);
+            }
+        }
         for seat in 0..self.players.len() {
             let card = inputs.get(seat).map(|i| i.card).unwrap_or(0);
             let fresh = card != self.players[seat].last_card;
@@ -623,6 +806,14 @@ impl World {
             p.shield_cd = (p.shield_cd - 1).max(0);
             let dir = V::new(input.mx as i32, input.my as i32);
             p.moving = !dir.is_zero();
+            p.dashed = false;
+            if p.moving {
+                p.moving_ticks += 1;
+                p.still_ticks = 0;
+            } else {
+                p.moving_ticks = 0;
+                p.still_ticks += 1;
+            }
             // the chooser's shield: given when a card opens, kept while it is
             // open and afterwards until the player moves, for rearranging the
             // rigs, but never longer than choose_guard_ms in all
@@ -653,6 +844,7 @@ impl World {
                 p.dash_dir = p.facing;
                 p.invulnerable = p.invulnerable.max(p.dash_left);
                 p.record.dashes += 1;
+                p.dashed = true;
             }
             let step = if p.dash_left > 0 {
                 p.dash_left -= 1;
@@ -662,7 +854,9 @@ impl World {
             } else {
                 dir.with_len(speed)
             };
+            let was = p.pos;
             p.pos = p.pos.add(step).clamp_box(half);
+            p.walked = (p.pos.sub(was).len() / crate::geom::SUB as i64) as i32;
         }
         for seat in 0..self.players.len() {
             if self.players[seat].alive {
@@ -678,6 +872,10 @@ impl World {
                     p.pos = p.pos.with_len(r);
                 }
             }
+        }
+        for seat in 0..self.players.len() {
+            self.wear_runes(seat);
+            self.trace(content, seat);
         }
     }
 
@@ -1258,7 +1456,12 @@ impl World {
         if !push.is_zero() {
             f.push = f.push.add(push.scale(100 - resist, 100));
         }
-        if f.hp > 0 {
+        let alive = f.hp > 0;
+        let at = f.pos;
+        if let Some(log) = self.hit_log.as_mut() {
+            log.push((at, !alive));
+        }
+        if alive {
             return false;
         }
         self.kill(content, i, seat, ability);
@@ -1494,6 +1697,8 @@ impl World {
         });
         self.shots.clear();
         self.in_rift = true;
+        self.fields.clear();
+        self.pending.clear();
         self.rift_left = ticks(content.rift.time_limit_ms);
         let n = self.players.len() as i32;
         for (k, p) in self.players.iter_mut().enumerate() {
@@ -1518,6 +1723,8 @@ impl World {
     fn leave_rift(&mut self, _content: &Content, won: bool) {
         let Some(stash) = self.stash.take() else { return };
         self.in_rift = false;
+        self.fields.clear();
+        self.pending.clear();
         self.foes = stash.foes;
         self.bolts = stash.bolts;
         self.pickups = stash.pickups;

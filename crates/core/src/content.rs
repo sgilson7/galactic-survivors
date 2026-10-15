@@ -3,7 +3,7 @@
 //! rule number lives in that file; this module only gives it types and
 //! checks that each reference names something that exists.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Obstacle {
@@ -38,6 +38,16 @@ pub struct RunRules {
     /// is shielded for at most this long (T13, the person's answer 1).
     #[serde(default)]
     pub choose_guard_ms: i32,
+    /// Sockets in each rig before Extra Socket (T15).
+    #[serde(default)]
+    pub rig_sockets: i32,
+    /// The chance, in percent, that a level-up hand holds a part card.
+    #[serde(default)]
+    pub part_card_pct: u32,
+    /// The chance, in percent, that a hand holds one card raising
+    /// something already held.
+    #[serde(default)]
+    pub up_card_pct: u32,
     pub hit_freeze_ms: i32,
     pub flash_ms: i32,
     pub knockback: i32,
@@ -119,6 +129,14 @@ pub struct Level {
     pub fuse_ms: i32,
     pub tick_ms: i32,
     pub fire_ms: i32,
+    /// A ground field the ability leaves where it lands (T14): `fire`,
+    /// `frost`, `charge` or `slick`; empty for none.
+    pub field: String,
+    /// A disc that flies out and comes back (Boomerang Disc).
+    pub returns: i32,
+    /// Strikes land one after another around the circle instead of at once
+    /// (Sweep Cannon).
+    pub sweep: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -132,6 +150,14 @@ pub enum Kind {
     Bomb,
     Beam,
     Turret,
+    /// Points marked on a circle around the origin, struck after a fuse
+    /// (Orbital Lance, Sweep Cannon).
+    Strike,
+    /// A pit that pulls enemies in and hurts them (Gravity Well).
+    Well,
+    /// A line from the player to the partner, or to the player's farthest
+    /// placed effect, that cuts what crosses it (Tether).
+    Tether,
 }
 
 /// How an ability chooses where to fire.
@@ -151,6 +177,142 @@ pub enum Aim {
     /// The player's own position.
     #[serde(rename = "self")]
     Own,
+    /// Behind the player, and only while moving (Wake Mine).
+    Behind,
+}
+
+/// What a part is (T15). A rig reads its sockets left to right: a
+/// modifier changes the next payload, a formation fires the next payload
+/// several times arranged, and a trigger fires the rest of the rig when its
+/// event happens.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PartKind {
+    #[default]
+    Modifier,
+    Formation,
+    Trigger,
+}
+
+/// The event a trigger waits for. Hit, expire and kill belong to the
+/// payload just before the trigger; the rest belong to the player.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum On {
+    #[default]
+    Hit,
+    Expire,
+    Kill,
+    Stride,
+    Dash,
+    Rune,
+    Clock,
+}
+
+impl On {
+    /// Whether the event belongs to the player rather than a payload.
+    pub fn is_player(self) -> bool {
+        matches!(self, On::Stride | On::Dash | On::Rune | On::Clock)
+    }
+}
+
+/// How a formation lays out its copies.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Arrange {
+    #[default]
+    Twin,
+    Fan,
+    Ring,
+    Behind,
+    Mirror,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct Part {
+    pub id: String,
+    pub kind: PartKind,
+    /// Added to the rig's recharge, in percent.
+    pub load_pct: i32,
+    /// Opened by an achievement or the salvage cache, not offered before.
+    pub rare: bool,
+    // a modifier
+    pub damage_pct: i32,
+    pub area_pct: i32,
+    pub speed_pct: i32,
+    pub count: i32,
+    pub bounce: i32,
+    pub pierce: i32,
+    pub homing: bool,
+    pub field: String,
+    pub slow_pct: i32,
+    pub slow_ms: i32,
+    pub pull: i32,
+    /// The payload fires again this long after.
+    pub echo_ms: i32,
+    /// The payload starts at the farthest enemy in reach and aims at the player.
+    pub wormhole: bool,
+    /// A burst of this percent of the payload's damage where it ends.
+    pub burst_pct: i32,
+    // a formation
+    pub arrange: Arrange,
+    pub copies: i32,
+    // a trigger
+    pub on: On,
+    pub stride_px: i32,
+    pub every_ms: i32,
+}
+
+/// One kind of ground field.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct FieldDef {
+    pub ms: i32,
+    pub radius: i32,
+    pub max_radius: i32,
+    pub tick_ms: i32,
+    /// Damage each tick, as a percent of the payload that left it.
+    pub damage_pct: i32,
+    pub slow_pct: i32,
+}
+
+/// Ground fields and how they react (T14).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct FieldRules {
+    pub cap: usize,
+    pub fire: FieldDef,
+    pub frost: FieldDef,
+    pub charge: FieldDef,
+    pub slick: FieldDef,
+    pub steam: FieldDef,
+    /// Fire meeting slick: a burst of this percent of the fire's damage.
+    pub flare_pct: i32,
+    /// Charge meeting slick or frost: each enemy in it is struck for this
+    /// percent of the charge's damage.
+    pub conduct_pct: i32,
+}
+
+/// Runes drawn by walking (T14).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct RuneRules {
+    /// A point of the trail is kept every this many pixels walked.
+    pub sample_px: i32,
+    pub max_points: usize,
+    pub min_points: usize,
+    /// The smallest loop that counts, in square pixels.
+    pub min_area: i64,
+    /// A turn sharper than this many degrees, measured across two points,
+    /// is a corner (cosine in thousandths).
+    pub corner_cos: i64,
+    pub ms: i32,
+    pub stacks: i32,
+    pub damage: i32,
+    pub circle_armor: i32,
+    pub triangle_damage_pct: i32,
+    pub square_area_pct: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -320,7 +482,15 @@ pub struct Achievement {
 }
 
 /// The kinds an achievement may unlock.
-pub const UNLOCKS: &[&str] = &["character", "ability", "evolution", "rank", "slot", "banish"];
+pub const UNLOCKS: &[&str] = &[
+    "character",
+    "ability",
+    "evolution",
+    "rank",
+    "slot",
+    "banish",
+    "part",
+];
 
 impl Achievement {
     /// The unlock split into kind and id, if any.
@@ -358,6 +528,10 @@ pub struct CacheRules {
     pub pity_epic: u32,
     pub max_rank: i32,
     pub shield_base_s: i32,
+    /// The chance, in percent, that an epic pull is a rare part the save
+    /// has not opened yet, while one is left (T15).
+    #[serde(default)]
+    pub part_pct: u32,
 }
 
 /// The gear window (T8, T9): typed slots, merging and scrapping.
@@ -393,6 +567,12 @@ pub struct Content {
     pub modules: Vec<Module>,
     pub cache: CacheRules,
     pub gear: GearRules,
+    #[serde(default)]
+    pub parts: Vec<Part>,
+    #[serde(default)]
+    pub fields: FieldRules,
+    #[serde(default)]
+    pub runes: RuneRules,
 }
 
 /// The stats a passive, a shop rank or a module may change. A name outside
@@ -412,7 +592,18 @@ pub const STATS: &[&str] = &[
     "starter_levels",
     "shield_s",
     "rift_tickets",
+    "momentum_pct",
+    "anchor_pct",
+    "rune_level",
+    "heat_sink_pct",
+    "double_tap",
+    "fuse_area_pct",
+    "sockets",
+    "formation_extra",
 ];
+
+/// The ground fields a payload or part may name.
+pub const FIELDS: &[&str] = &["fire", "frost", "charge", "slick"];
 
 /// Stats the person ruled out: "xp and gold: not allowed". No shop item or
 /// module may raise them.
@@ -447,6 +638,10 @@ impl Content {
 
     pub fn enemy_index(&self, id: &str) -> usize {
         self.enemies.iter().position(|e| e.id == id).unwrap_or(0)
+    }
+
+    pub fn part(&self, id: &str) -> Option<&Part> {
+        self.parts.iter().find(|p| p.id == id)
     }
 
     pub fn module(&self, id: &str) -> Option<&Module> {
@@ -605,6 +800,7 @@ impl Content {
                     .map(|n| n >= self.gear.open_slots && n < self.gear.slots.len())
                     .unwrap_or(false),
                 "banish" => id.parse::<i32>().is_ok(),
+                "part" => self.part(id).map(|p| p.rare).unwrap_or(false),
                 _ => false,
             };
             if !known || !UNLOCKS.contains(&kind) {
@@ -625,6 +821,29 @@ impl Content {
                     "outfitter line {} has {} ranks but {} open and {more} from achievements",
                     s.id, s.ranks, s.open
                 ));
+            }
+        }
+        for p in &self.parts {
+            if self.ability(&p.id).is_some() || self.passive(&p.id).is_some() {
+                return Err(format!("part {} shares its id with an ability or passive", p.id));
+            }
+            if !p.field.is_empty() && !FIELDS.contains(&p.field.as_str()) {
+                return Err(format!("part {} leaves unknown field {}", p.id, p.field));
+            }
+            if p.kind == PartKind::Formation && p.copies < 1 {
+                return Err(format!("formation {} makes no copies", p.id));
+            }
+            if p.kind == PartKind::Trigger
+                && ((p.on == On::Stride && p.stride_px <= 0) || (p.on == On::Clock && p.every_ms <= 0))
+            {
+                return Err(format!("trigger {} has no stride or interval", p.id));
+            }
+        }
+        for a in self.abilities.iter().chain(self.evolutions.iter()) {
+            for l in &a.levels {
+                if !l.field.is_empty() && !FIELDS.contains(&l.field.as_str()) {
+                    return Err(format!("ability {} leaves unknown field {}", a.id, l.field));
+                }
             }
         }
         if self.cache.common + self.cache.rare + self.cache.epic == 0 {

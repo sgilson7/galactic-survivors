@@ -5,7 +5,7 @@
 //! save, read a file, open the transport); the page does that and reports
 //! back through `act`.
 
-use crate::content::{Kind, Rarity};
+use crate::content::{Kind, PartKind, Rarity};
 use crate::game::{Game, Screen};
 use crate::online;
 use crate::world::{CardKind, OfferKind};
@@ -684,10 +684,18 @@ fn cache(g: &Game, ui: &mut Ui) {
             .enumerate()
             .map(|(k, p)| Item {
                 id: format!("pull{k}"),
-                icon: "icons/module".into(),
+                icon: if p.part {
+                    format!("icons/{}", p.id)
+                } else {
+                    "icons/module".into()
+                },
                 title: t.name(&p.id),
-                text: t.get(&format!("rarity.{}", rarity_tone(p.rarity))),
-                tag: if p.new {
+                text: if p.part {
+                    t.get("cache.part")
+                } else {
+                    t.get(&format!("rarity.{}", rarity_tone(p.rarity)))
+                },
+                tag: if p.part || p.new {
                     t.get("cache.new")
                 } else {
                     t.fill(
@@ -873,7 +881,7 @@ fn achievements(g: &Game, ui: &mut Ui) {
 }
 
 /// The codex tabs, in order.
-pub const CODEX_TABS: &[&str] = &["abilities", "passives", "evolutions"];
+pub const CODEX_TABS: &[&str] = &["abilities", "passives", "evolutions", "parts", "ground"];
 
 fn level_line(g: &Game, id: &str, level: i32) -> String {
     let t = &g.text;
@@ -973,6 +981,70 @@ pub fn codex(g: &Game) -> Panel {
                     icon: format!("icons/{}", p.id),
                     title: t.name(&p.id),
                     text,
+                    tone: "rare".into(),
+                    ..Item::default()
+                });
+            }
+        }
+        "parts" => {
+            // modifiers, formations, triggers, then the rare ones
+            let mut parts: Vec<&crate::content::Part> = c.parts.iter().collect();
+            parts.sort_by_key(|p| (p.rare, p.kind as u8));
+            for p in parts {
+                let lock = unlock_hint(g, "part", &p.id)
+                    .or_else(|| g.save.locked(c, "part", &p.id).then(|| t.get("lock.cache")));
+                let mut text = part_text(g, &p.id, false);
+                if let Some(h) = &lock {
+                    text = format!("{text} {h}");
+                }
+                items.push(Item {
+                    id: p.id.clone(),
+                    icon: format!("icons/{}", p.id),
+                    title: t.name(&p.id),
+                    text,
+                    tag: t.get(&format!("part.kind.{}", part_kind_name(p.kind))),
+                    tone: if lock.is_some() {
+                        "locked"
+                    } else if p.rare {
+                        "epic"
+                    } else {
+                        part_kind_name(p.kind)
+                    }
+                    .into(),
+                    ..Item::default()
+                });
+            }
+        }
+        "ground" => {
+            for f in crate::content::FIELDS {
+                items.push(Item {
+                    id: format!("field_{f}"),
+                    icon: format!("icons/field_{f}"),
+                    title: t.name(&format!("field_{f}")),
+                    text: t.get(&format!("about.field_{f}")),
+                    ..Item::default()
+                });
+            }
+            for shape in crate::rune::Shape::ALL {
+                let id = format!("rune_{}", shape.name());
+                let r = &c.runes;
+                let n = match shape {
+                    crate::rune::Shape::Circle => r.circle_armor,
+                    crate::rune::Shape::Triangle => r.triangle_damage_pct,
+                    crate::rune::Shape::Square => r.square_area_pct,
+                };
+                items.push(Item {
+                    id: id.clone(),
+                    icon: format!("icons/{id}"),
+                    title: t.name(&id),
+                    text: format!(
+                        "{} {}",
+                        t.fill(&format!("about.{id}"), &[("n", n.to_string())]),
+                        t.fill(
+                            "rune.about",
+                            &[("s", (r.ms / 1000).to_string()), ("stacks", r.stacks.to_string())]
+                        )
+                    ),
                     tone: "rare".into(),
                     ..Item::default()
                 });
@@ -1116,7 +1188,7 @@ fn help(g: &Game, ui: &mut Ui) {
         kind: "prose".into(),
         heading: t.get("help.heading"),
         text: t.get("help.text"),
-        items: ["move", "aim", "dash", "cards", "pause"]
+        items: ["move", "aim", "dash", "cards", "pause", "rigs", "runes"]
             .iter()
             .map(|k| Item {
                 id: (*k).into(),
@@ -1310,6 +1382,21 @@ fn card_item(g: &Game, seat: usize, k: usize, card: &crate::world::Card, banish:
             "icons/gold".into(),
             "",
         ),
+        CardKind::Part => {
+            let d = c.part(&card.id);
+            let kind = part_kind_name(d.map(|d| d.kind).unwrap_or_default());
+            (
+                t.name(&card.id),
+                part_text(g, &card.id, true),
+                t.get(&format!("part.kind.{kind}")),
+                format!("icons/{}", card.id),
+                if d.map(|d| d.rare).unwrap_or(false) {
+                    "epic"
+                } else {
+                    "part"
+                },
+            )
+        }
     };
     Item {
         id: format!("card{k}"),
@@ -1320,6 +1407,192 @@ fn card_item(g: &Game, seat: usize, k: usize, card: &crate::world::Card, banish:
         tone: tone.into(),
         actions,
         ..Item::default()
+    }
+}
+
+pub fn part_kind_name(k: PartKind) -> &'static str {
+    match k {
+        PartKind::Modifier => "modifier",
+        PartKind::Formation => "formation",
+        PartKind::Trigger => "trigger",
+    }
+}
+
+/// What a part does, its load, and (on a card) where it will go.
+pub fn part_text(g: &Game, id: &str, on_card: bool) -> String {
+    let t = &g.text;
+    let Some(d) = g.content.part(id) else {
+        return String::new();
+    };
+    let mut body = t.get(&format!("about.{id}"));
+    if d.load_pct > 0 {
+        body = format!("{body} {}", t.fill("part.load", &[("n", d.load_pct.to_string())]));
+    }
+    if on_card {
+        body = format!(
+            "{body} {}",
+            t.get(&format!("part.goes.{}", part_kind_name(d.kind)))
+        );
+    }
+    body
+}
+
+/// What a socket holds, as a tile: name, kind and colour.
+fn token_item(
+    g: &Game,
+    w: &crate::world::World,
+    seat: usize,
+    id: &str,
+    spot: crate::rig::Spot,
+    at: [i32; 2],
+) -> Item {
+    let t = &g.text;
+    let c = &g.content;
+    let picked = g.rig_pick == Some(spot);
+    let click = act(
+        "rig.pick",
+        &spot.text(),
+        if id.is_empty() {
+            t.get("rig.empty")
+        } else {
+            t.name(id)
+        },
+    );
+    let (title, tag, tone, icon) = if id.is_empty() {
+        (String::new(), String::new(), "empty", String::new())
+    } else if let Some(p) = c.part(id) {
+        (
+            t.name(id),
+            t.get(&format!("part.kind.{}", part_kind_name(p.kind))),
+            if p.rare { "epic" } else { part_kind_name(p.kind) },
+            format!("icons/{id}"),
+        )
+    } else {
+        let level = w.players[seat]
+            .abilities
+            .iter()
+            .find(|a| a.id == id)
+            .map(|a| a.level)
+            .unwrap_or(1);
+        (
+            t.name(id),
+            if c.is_evolution(id) {
+                t.get("build.evolved")
+            } else {
+                t.fill("card.level", &[("n", level.to_string())])
+            },
+            "payload",
+            format!("icons/{id}"),
+        )
+    };
+    Item {
+        id: format!("rig-{}", spot.text()),
+        icon,
+        title,
+        tag,
+        tone: tone.into(),
+        at: Some(at),
+        click: Some(click),
+        selected: picked,
+        ..Item::default()
+    }
+}
+
+/// The rig window (T15): one row a rig, then the spare parts. Click a
+/// token, then the socket it should go to; the run keeps going.
+fn rig_panel(g: &Game, w: &crate::world::World, seat: usize) -> Panel {
+    use crate::rig::Spot;
+    let t = &g.text;
+    let c = &g.content;
+    let p = &w.players[seat];
+    let mut items = Vec::new();
+    for (r, rig) in p.rigs.iter().enumerate() {
+        let (cut, trigger) = w.split_rig(c, &rig.sockets);
+        let mut how = match w.rig_cooldown(c, seat, r) {
+            Some(cd) => t.fill("rig.every", &[("s", seconds_text(cd * 1000 / crate::geom::TPS))]),
+            None if cut > 0 || trigger.is_none() => t.get("rig.idle"),
+            None => String::new(),
+        };
+        if let Some(tr) = trigger {
+            let on = t.fill("rig.on", &[("event", t.name(&tr.id))]);
+            how = if how.is_empty() { on } else { format!("{how} {on}") };
+        }
+        items.push(Item {
+            id: format!("rig{r}"),
+            title: t.fill("rig.name", &[("n", (r + 1).to_string())]),
+            text: how,
+            tone: "label".into(),
+            at: Some([0, r as i32]),
+            ..Item::default()
+        });
+        for (s, id) in rig.sockets.iter().enumerate() {
+            items.push(token_item(
+                g,
+                w,
+                seat,
+                id,
+                Spot::Socket(r, s),
+                [s as i32 + 1, r as i32],
+            ));
+        }
+    }
+    let row = p.rigs.len() as i32;
+    items.push(Item {
+        id: "spare".into(),
+        title: t.get("rig.spare"),
+        text: t.get("rig.spare.about"),
+        tone: "label".into(),
+        at: Some([0, row]),
+        ..Item::default()
+    });
+    let width = p.rigs.first().map(|r| r.sockets.len()).unwrap_or(4).max(4);
+    // the spare parts, and one free place to put a token down
+    for k in 0..=p.spare.len() {
+        let id = p.spare.get(k).cloned().unwrap_or_default();
+        let at = [(k % width) as i32 + 1, row + (k / width) as i32];
+        items.push(token_item(g, w, seat, &id, Spot::Spare(k), at));
+    }
+    let text = match g.rig_pick {
+        Some(spot) => {
+            let id = match spot {
+                Spot::Socket(r, s) => p.rigs.get(r).and_then(|r| r.sockets.get(s)).cloned(),
+                Spot::Spare(k) => p.spare.get(k).cloned(),
+            }
+            .unwrap_or_default();
+            let about = if c.part(&id).is_some() {
+                part_text(g, &id, false)
+            } else {
+                t.get(&format!("about.{id}"))
+            };
+            t.fill(
+                "rig.picked",
+                &[
+                    ("name", t.name(&id)),
+                    ("about", about),
+                    ("place", t.get("rig.place")),
+                ],
+            )
+        }
+        None => t.get(if g.coop_running() || p.offer.is_none() {
+            "rig.explain"
+        } else {
+            "rig.explain_paused"
+        }),
+    };
+    let mut actions = vec![hint(
+        primary(act("rig.close", "", t.get("rig.close"))),
+        t.get("key.rigs"),
+    )];
+    if p.offer.is_some() {
+        actions.push(act("rig.close", "", t.get("rig.to_cards")));
+    }
+    Panel {
+        id: "rigs".into(),
+        kind: "rigs".into(),
+        heading: t.get("rig.heading"),
+        text,
+        items,
+        actions,
     }
 }
 
@@ -1419,6 +1692,25 @@ fn build_details(g: &Game, w: &crate::world::World, seat: usize) -> Vec<Item> {
             ..Item::default()
         });
     }
+    // each rig in reading order (T15)
+    for (r, rig) in p.rigs.iter().enumerate() {
+        let names: Vec<String> = rig
+            .sockets
+            .iter()
+            .filter(|s| !s.is_empty())
+            .map(|s| t.name(s))
+            .collect();
+        if names.is_empty() {
+            continue;
+        }
+        items.push(Item {
+            id: format!("rig{r}"),
+            title: t.fill("rig.name", &[("n", (r + 1).to_string())]),
+            text: names.join(" → "),
+            tone: "payload".into(),
+            ..Item::default()
+        });
+    }
     for slot in &p.passives {
         let per = c.passive(&slot.id).map(|d| d.per_level).unwrap_or(0);
         let mut text = t.fill(&format!("about.{}", slot.id), &[("n", per.to_string())]);
@@ -1454,7 +1746,9 @@ fn run(g: &Game, ui: &mut Ui) {
     let Some(w) = g.world.as_ref() else { return };
     let c = &g.content;
     let me = &w.players[g.seat.min(w.players.len() - 1)];
-    if let Some(offer) = &me.offer {
+    if g.rigs_open && me.alive {
+        ui.overlay = Some(rig_panel(g, w, me.seat));
+    } else if let Some(offer) = &me.offer {
         let banish = offer.kind == OfferKind::LevelUp && me.banishes > 0;
         let items = offer
             .cards
@@ -1462,7 +1756,7 @@ fn run(g: &Game, ui: &mut Ui) {
             .enumerate()
             .map(|(k, card)| card_item(g, me.seat, k, card, banish))
             .collect();
-        let mut actions = Vec::new();
+        let mut actions = vec![hint(act("rig.open", "", t.get("rig.open")), t.get("key.rigs"))];
         if offer.kind == OfferKind::LevelUp {
             actions.push(hint(
                 enabled(
@@ -1572,13 +1866,14 @@ fn run(g: &Game, ui: &mut Ui) {
                     act("run.inspect", "", t.get("inspect.button")),
                     t.get("key.inspect"),
                 ),
+                hint(act("rig.open", "", t.get("rig.open")), t.get("key.rigs")),
                 act("run.quit", "", t.get("coop.leave")),
             ]
         } else {
-            vec![hint(
-                act("run.pause", "", t.get("pause.button")),
-                t.get("key.pause"),
-            )]
+            vec![
+                hint(act("run.pause", "", t.get("pause.button")), t.get("key.pause")),
+                hint(act("rig.open", "", t.get("rig.open")), t.get("key.rigs")),
+            ]
         },
         ..Panel::default()
     });

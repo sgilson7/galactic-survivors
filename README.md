@@ -13,7 +13,8 @@ The game started from a conversation between two players of Vampire Survivors, H
 - **Evolutions should come earlier, but not too early.** When an ability can evolve, the next level-up offers the evolution as a card, so it never waits for a boss to drop a crate. After the first playtest, evolving also needs the partner passive at level three, because players evolved within two or three minutes. In the run probe, a player who builds toward it now evolves at about three to six minutes.
 - **No character should be useless against a boss.** Both players remembered a character whose attacks could not hurt most bosses. Here no enemy is immune to anything, and a test fires every character's starting ability at every boss.
 - **A wall should always be grindable.** Gold is kept when you lose, and the outfitter sells permanent upgrades. At the person's request it sells no extra experience or extra gold, since those are the upgrade everyone has to buy first. After the first playtest, most outfitter ranks start locked and achievements open them one at a time, so nobody can buy everything after one good run.
-- **Achievements should be worth something, and some should be hard.** There are 56 on a grid, as in Halls of Torment. A few show at the start; earning one shows the ones next to it, and a hidden one can still be earned before you see it. Each pays gold and tickets, and many open an outfitter rank, a gear slot, an ability, an evolution or a character.
+- **Abilities are built, as well as picked.** At a designer's request, after Noita's wands, each ability slot is a rig: a row of sockets read left to right. Parts from level-up cards go in the sockets. A modifier changes the next ability (Ignite leaves fire where it lands), a formation fires it several times (Ring fires six around you), and a trigger hands the rest of the rig to an event (On Hit fires it where the ability before it hit). A rig never shuffles or misfires, so the same rig always does the same thing.
+- **Achievements should be worth something, and some should be hard.** There are 64 on a grid, as in Halls of Torment. A few show at the start; earning one shows the ones next to it, and a hidden one can still be earned before you see it. Each pays gold and tickets, and many open an outfitter rank, a gear slot, an ability, an evolution or a character.
 
 ## How to play
 
@@ -21,6 +22,8 @@ The game started from a conversation between two players of Vampire Survivors, H
 - **Aim** with the mouse. Only the Rail Bolt and the Cutting Beam use it, and Auto-aim in Settings turns that off.
 - **Choose cards** with 1, 2 or 3, or click one. R draws a new hand. A banish removes a card for the rest of the run.
 - **Dash** with Space, as Vector.
+- **Rigs** with E. Click a part, then the socket it should go to. The run keeps going while the window is open; in co-op, a player choosing a card is shielded until they move.
+- **Runes** by walking a closed loop: a circle, a triangle or a square. A rune strikes every enemy inside it and gives a passive for a while.
 - **Pause** with Esc in a solo run. The pause screen shows your build: what each ability does now, and what it still needs to evolve. In co-op, press I to see your build without pausing.
 - **The codex**, from the title screen or the pause screen, lists every ability, passive and evolution with its numbers and recipe.
 
@@ -34,7 +37,7 @@ Three characters: Pathfinder (balanced; its drone does the aiming), Breaker (a h
 
 ## Playing together
 
-One player opens Play co-op and hosts a room; the other types the room code. If a room code cannot connect, the host can make an invitation instead: copy it to your partner, who pastes it and sends back a reply. The two browsers then talk directly to each other. Both players share experience and level up together. A player who goes down becomes a ghost that drops repair cells, and comes back when the partner stands beside it long enough.
+One player opens Play co-op and hosts a room; the other types the room code. Each browser runs the whole run and sends only its key presses. Your own moves show at once; your partner's are guessed and put right when their keys arrive (rollback, as in Raiders of the Lost Mart), so a slow message no longer freezes both screens. The ping and the number of corrections show at the top right. If a room code cannot connect, the host can make an invitation instead: copy it to your partner, who pastes it and sends back a reply. The two browsers then talk directly to each other. Both players share experience and level up together. A player who goes down becomes a ghost that drops repair cells, and comes back when the partner stands beside it long enough.
 
 Room codes are introduced over public Nostr relays listed in `web/net/config.js`; invitations use no server at all. Two players who are both on strict networks may not be able to connect, because the game has no relay server of its own for game traffic.
 

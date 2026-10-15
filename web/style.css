@@ -31,6 +31,13 @@
   --ticket: #b48cff;
   --cache: #e3dfd0;
   --rock: #4b4562;
+  /* ground fields and the rune trail (T14): flat and dim under everything */
+  --fire: #ff8a3d;
+  --frost: #9fd8ff;
+  --charge: #e9f56a;
+  --slick: #6a5a8c;
+  --steam: #d9d4e8;
+  --trail: #8f86ad;
   --accent: #b8e04a;
   --line: #3b3650;
   --common: #a69fbd;
@@ -217,6 +224,37 @@ kbd { font: 600 12px var(--hud-font); border: 1px solid currentColor; padding: 1
 #overlay .item img { width: 64px; height: 64px; }
 #overlay .item[data-tone="epic"] { border-color: var(--epic); }
 #overlay .panel > .actions { margin-top: 12px; }
+
+/* the rig window (T15): docked at the bottom, the field left in view, since
+   the run keeps going while it is open */
+#overlay:has(.panel[data-kind="rigs"]) { background: transparent; align-items: flex-end; pointer-events: none; padding: 8px; }
+#overlay .panel[data-kind="rigs"] { pointer-events: auto; width: min(700px, 100%); padding: 8px 10px; background: rgba(29, 26, 40, 0.9); display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: start; }
+#overlay .panel[data-kind="rigs"] h2 { font-size: 15px; margin: 0; grid-column: 1; }
+#overlay .panel[data-kind="rigs"] .lead { font-size: 12px; margin: 0 0 6px; grid-column: 1 / -1; }
+#overlay .panel[data-kind="rigs"] > .actions { grid-column: 2; grid-row: 1; margin: 0; }
+#overlay .panel[data-kind="rigs"] > .actions button { padding: 4px 10px; font-size: 13px; }
+#overlay .panel[data-kind="rigs"] .items { grid-column: 1 / -1; grid-template-columns: minmax(86px, 128px); grid-auto-columns: 58px; grid-auto-rows: 50px; gap: 4px; }
+#overlay .panel[data-kind="rigs"] .item { padding: 2px; gap: 0; align-items: center; justify-content: center; text-align: center; border-left-width: 3px; overflow: hidden; }
+#overlay .panel[data-kind="rigs"] .item img { width: 30px; height: 30px; }
+#overlay .panel[data-kind="rigs"] .item h3 { font-size: 9px; line-height: 1; }
+#overlay .panel[data-kind="rigs"] .item .tag { display: none; }
+#overlay .panel[data-kind="rigs"] .item p { font-size: 10px; line-height: 1.15; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="label"] { border: 0; background: none; align-items: flex-start; text-align: left; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="label"] h3 { font-size: 11px; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="empty"] { border-style: dashed; opacity: 0.6; }
+.item[data-tone="payload"] { border-left-color: var(--seat0); }
+.item[data-tone="modifier"] { border-left-color: var(--hp); }
+.item[data-tone="formation"] { border-left-color: var(--xp); }
+.item[data-tone="trigger"] { border-left-color: var(--rift); }
+.item[data-tone="part"] { border-left-color: var(--hp); }
+@media (max-width: 600px) {
+  #overlay .panel[data-kind="rigs"] .items { grid-template-columns: 64px; grid-auto-columns: 46px; grid-auto-rows: 44px; }
+  #overlay .panel[data-kind="rigs"] .item img { width: 24px; height: 24px; }
+  #overlay .panel[data-kind="rigs"] .item h3 { display: none; }
+  #overlay .panel[data-kind="rigs"] .item[data-tone="label"] h3 { display: block; }
+  #overlay .panel[data-kind="rigs"] .item[data-tone="label"] p { display: none; }
+}
+
 #hud {
   position: fixed;
   left: 0;

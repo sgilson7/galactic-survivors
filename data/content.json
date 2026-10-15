@@ -18,6 +18,9 @@
     "evolve_partner_level": 3,
     "contact_window_ms": 600,
     "choose_guard_ms": 8000,
+    "rig_sockets": 4,
+    "part_card_pct": 40,
+    "up_card_pct": 100,
     "invulnerable_ms": 400,
     "hit_freeze_ms": 50,
     "flash_ms": 90,
@@ -176,7 +179,49 @@
       {"damage": 10, "cooldown_ms": 5800, "count": 1, "duration_ms": 5500, "fire_ms": 460, "speed": 620, "radius": 5, "range": 400},
       {"damage": 12, "cooldown_ms": 5600, "count": 1, "duration_ms": 6000, "fire_ms": 420, "speed": 640, "radius": 6, "range": 420},
       {"damage": 14, "cooldown_ms": 5400, "count": 2, "duration_ms": 6000, "fire_ms": 400, "speed": 660, "radius": 6, "range": 440},
-      {"damage": 16, "cooldown_ms": 5200, "count": 2, "duration_ms": 6500, "fire_ms": 360, "speed": 680, "radius": 6, "range": 460}]}
+      {"damage": 16, "cooldown_ms": 5200, "count": 2, "duration_ms": 6500, "fire_ms": 360, "speed": 680, "radius": 6, "range": 460}]},
+    {"id": "orbital_lance", "kind": "strike", "aim": "self", "levels": [
+      {"damage": 24, "cooldown_ms": 2600, "count": 3, "range": 150, "radius": 46, "fuse_ms": 600},
+      {"damage": 28, "cooldown_ms": 2500, "count": 3, "range": 160, "radius": 48, "fuse_ms": 600},
+      {"damage": 32, "cooldown_ms": 2400, "count": 4, "range": 170, "radius": 52, "fuse_ms": 600},
+      {"damage": 37, "cooldown_ms": 2200, "count": 5, "range": 180, "radius": 56, "fuse_ms": 600},
+      {"damage": 44, "cooldown_ms": 2000, "count": 6, "range": 190, "radius": 60, "fuse_ms": 600}]},
+    {"id": "sweep_cannon", "kind": "strike", "aim": "self", "levels": [
+      {"damage": 12, "cooldown_ms": 5200, "count": 10, "range": 150, "radius": 36, "fuse_ms": 400, "tick_ms": 60, "sweep": 1, "field": "fire"},
+      {"damage": 14, "cooldown_ms": 5000, "count": 11, "range": 155, "radius": 38, "fuse_ms": 400, "tick_ms": 60, "sweep": 1, "field": "fire"},
+      {"damage": 16, "cooldown_ms": 4800, "count": 12, "range": 160, "radius": 40, "fuse_ms": 400, "tick_ms": 55, "sweep": 1, "field": "fire"},
+      {"damage": 19, "cooldown_ms": 4500, "count": 13, "range": 165, "radius": 42, "fuse_ms": 400, "tick_ms": 50, "sweep": 1, "field": "fire"},
+      {"damage": 22, "cooldown_ms": 4200, "count": 14, "range": 170, "radius": 44, "fuse_ms": 400, "tick_ms": 45, "sweep": 1, "field": "fire"}]},
+    {"id": "wake_mine", "kind": "bomb", "aim": "behind", "levels": [
+      {"damage": 26, "cooldown_ms": 900, "count": 1, "radius": 60, "fuse_ms": 7000},
+      {"damage": 30, "cooldown_ms": 850, "count": 1, "radius": 64, "fuse_ms": 7000},
+      {"damage": 34, "cooldown_ms": 780, "count": 1, "radius": 68, "fuse_ms": 7000},
+      {"damage": 40, "cooldown_ms": 700, "count": 2, "radius": 72, "fuse_ms": 7000},
+      {"damage": 46, "cooldown_ms": 600, "count": 2, "radius": 76, "fuse_ms": 7000}]},
+    {"id": "gravity_well", "kind": "well", "aim": "cluster", "levels": [
+      {"damage": 4, "cooldown_ms": 4200, "radius": 120, "range": 360, "duration_ms": 2000, "tick_ms": 300, "pull": 160},
+      {"damage": 5, "cooldown_ms": 4000, "radius": 128, "range": 370, "duration_ms": 2200, "tick_ms": 300, "pull": 175},
+      {"damage": 6, "cooldown_ms": 3800, "radius": 135, "range": 380, "duration_ms": 2400, "tick_ms": 280, "pull": 190},
+      {"damage": 7, "cooldown_ms": 3600, "radius": 142, "range": 390, "duration_ms": 2600, "tick_ms": 260, "pull": 205},
+      {"damage": 8, "cooldown_ms": 3400, "radius": 150, "range": 400, "duration_ms": 2800, "tick_ms": 240, "pull": 220}]},
+    {"id": "tether", "kind": "tether", "aim": "self", "levels": [
+      {"damage": 8, "cooldown_ms": 4000, "width": 10, "range": 420, "duration_ms": 4000, "tick_ms": 200},
+      {"damage": 10, "cooldown_ms": 4000, "width": 11, "range": 440, "duration_ms": 4000, "tick_ms": 200},
+      {"damage": 12, "cooldown_ms": 4000, "width": 12, "range": 460, "duration_ms": 4000, "tick_ms": 190},
+      {"damage": 14, "cooldown_ms": 4000, "width": 14, "range": 480, "duration_ms": 4000, "tick_ms": 180},
+      {"damage": 16, "cooldown_ms": 4000, "width": 16, "range": 500, "duration_ms": 4000, "tick_ms": 170}]},
+    {"id": "boomerang_disc", "kind": "shot", "aim": "nearest", "levels": [
+      {"damage": 16, "cooldown_ms": 1400, "count": 1, "speed": 520, "range": 380, "radius": 10, "pierce": 99, "returns": 1, "spread": 2000},
+      {"damage": 19, "cooldown_ms": 1300, "count": 1, "speed": 540, "range": 395, "radius": 11, "pierce": 99, "returns": 1, "spread": 2000},
+      {"damage": 22, "cooldown_ms": 1200, "count": 2, "speed": 560, "range": 410, "radius": 11, "pierce": 99, "returns": 1, "spread": 2000},
+      {"damage": 26, "cooldown_ms": 1100, "count": 2, "speed": 580, "range": 425, "radius": 12, "pierce": 99, "returns": 1, "spread": 2000},
+      {"damage": 30, "cooldown_ms": 1000, "count": 2, "speed": 600, "range": 440, "radius": 13, "pierce": 99, "returns": 1, "spread": 2000}]},
+    {"id": "seed_pod", "kind": "turret", "aim": "self", "levels": [
+      {"damage": 9, "cooldown_ms": 5200, "count": 1, "fuse_ms": 1200, "fire_ms": 500, "duration_ms": 6000, "speed": 600, "range": 380, "radius": 6},
+      {"damage": 10, "cooldown_ms": 5000, "count": 1, "fuse_ms": 1200, "fire_ms": 470, "duration_ms": 6200, "speed": 600, "range": 380, "radius": 6},
+      {"damage": 12, "cooldown_ms": 4800, "count": 1, "fuse_ms": 1100, "fire_ms": 440, "duration_ms": 6500, "speed": 620, "range": 390, "radius": 6},
+      {"damage": 13, "cooldown_ms": 4600, "count": 2, "fuse_ms": 1000, "fire_ms": 410, "duration_ms": 6800, "speed": 620, "range": 390, "radius": 7},
+      {"damage": 15, "cooldown_ms": 4400, "count": 2, "fuse_ms": 900, "fire_ms": 380, "duration_ms": 7000, "speed": 640, "range": 400, "radius": 7}]}
   ],
   "evolutions": [
     {"id": "swarm_battery", "kind": "shot", "aim": "nearest", "levels": [
@@ -198,7 +243,15 @@
     {"id": "thrusters", "stat": "speed_pct", "per_level": 7},
     {"id": "plating", "stat": "max_hp", "per_level": 20},
     {"id": "hardened_shell", "stat": "armor", "per_level": 1},
-    {"id": "magnet_coil", "stat": "pickup_pct", "per_level": 25}
+    {"id": "magnet_coil", "stat": "pickup_pct", "per_level": 25},
+    {"id": "momentum", "stat": "momentum_pct", "per_level": 2},
+    {"id": "anchor", "stat": "anchor_pct", "per_level": 8},
+    {"id": "glyph_memory", "stat": "rune_level", "per_level": 1, "max_level": 3},
+    {"id": "heat_sink", "stat": "heat_sink_pct", "per_level": 10},
+    {"id": "double_tap", "stat": "double_tap", "per_level": 1, "max_level": 3},
+    {"id": "long_fuse", "stat": "fuse_area_pct", "per_level": 10},
+    {"id": "extra_socket", "stat": "sockets", "per_level": 1, "max_level": 2},
+    {"id": "wide_formation", "stat": "formation_extra", "per_level": 1, "max_level": 2}
   ],
   "enemies": [
     {"id": "skitter", "hp": 12, "speed": 110, "damage": 8, "radius": 15, "xp": 1, "behaviour": "chase", "size": 44},
@@ -301,7 +354,15 @@
     {"id": "burrower_x5", "stat": "boss.burrower", "target": 5, "at": [4, 6], "icon": "boss", "gold": 150, "tickets": 2, "unlock": "rank:plating_rank"},
     {"id": "carapace_cracker", "stat": "kills.carapace", "target": 300, "at": [5, 6], "icon": "slayer", "gold": 120, "tickets": 2, "unlock": "rank:shell_rank"},
     {"id": "field_medic", "stat": "revives", "target": 3, "at": [6, 6], "icon": "coop", "gold": 100, "tickets": 2},
-    {"id": "squad_win", "stat": "coop_wins", "target": 1, "at": [7, 6], "icon": "coop", "gold": 200, "tickets": 3}
+    {"id": "squad_win", "stat": "coop_wins", "target": 1, "at": [7, 6], "icon": "coop", "gold": 200, "tickets": 3},
+    {"id": "first_rune", "stat": "runes", "target": 1, "at": [0, 7], "start": true, "icon": "evolve", "gold": 50, "tickets": 1, "unlock": "part:clockwork"},
+    {"id": "rune_scholar", "stat": "best_runes", "target": 25, "at": [1, 7], "icon": "evolve", "gold": 150, "tickets": 2, "unlock": "part:mirror"},
+    {"id": "field_day", "stat": "best_field_kills", "target": 300, "at": [2, 7], "icon": "slayer", "gold": 150, "tickets": 2, "unlock": "part:afterburst"},
+    {"id": "chain_reaction", "stat": "best_trigger_depth", "target": 3, "at": [3, 7], "icon": "weapon", "gold": 150, "tickets": 2, "unlock": "part:wormhole"},
+    {"id": "full_rig", "stat": "best_rig_parts", "target": 5, "at": [4, 7], "icon": "weapon", "gold": 150, "tickets": 2, "unlock": "part:overcharge"},
+    {"id": "wake_walker", "stat": "best_kills.wake_mine", "target": 200, "at": [5, 7], "icon": "slayer", "gold": 120, "tickets": 2, "unlock": "part:phantom_shot"},
+    {"id": "steam_engine", "stat": "best_reactions", "target": 20, "at": [6, 7], "icon": "evolve", "gold": 300, "tickets": 3},
+    {"id": "orbital_strike", "stat": "best_kills.orbital_lance", "target": 400, "at": [7, 7], "icon": "weapon", "gold": 200, "tickets": 5}
   ],
   "modules": [
     {"id": "kinetic_core", "rarity": "common", "slot": "core", "stat": "damage_pct", "per_rank": 3},
@@ -317,6 +378,47 @@
     {"id": "spare_reroll", "rarity": "rare", "slot": "utility", "stat": "rerolls", "per_rank": 1},
     {"id": "rift_key", "rarity": "epic", "slot": "utility", "stat": "rift_tickets", "per_rank": 1}
   ],
-  "cache": {"pull_cost": 1, "ten_pull": 10, "common": 70, "rare": 25, "epic": 5, "pity_rare": 10, "pity_epic": 40, "max_rank": 5, "shield_base_s": 80},
-  "gear": {"slots": ["core", "frame", "utility", "utility"], "open_slots": 2, "merge_count": 2, "scrap_common": 10, "scrap_rare": 30, "scrap_epic": 80}
+  "cache": {"pull_cost": 1, "ten_pull": 10, "common": 70, "rare": 25, "epic": 5, "pity_rare": 10, "pity_epic": 40, "max_rank": 5, "shield_base_s": 80, "part_pct": 50},
+  "gear": {"slots": ["core", "frame", "utility", "utility"], "open_slots": 2, "merge_count": 2, "scrap_common": 10, "scrap_rare": 30, "scrap_epic": 80},
+  "_parts": "Parts for rigs (T15), read left to right. load_pct adds to the rig's recharge. A rare part is offered only once an achievement or the salvage cache opens it.",
+  "parts": [
+    {"id": "ignite", "kind": "modifier", "field": "fire", "load_pct": 15},
+    {"id": "frost", "kind": "modifier", "field": "frost", "slow_pct": 30, "slow_ms": 1200, "load_pct": 15},
+    {"id": "shock", "kind": "modifier", "field": "charge", "load_pct": 15},
+    {"id": "oil", "kind": "modifier", "field": "slick", "load_pct": 10},
+    {"id": "scatter", "kind": "modifier", "count": 2, "damage_pct": -25, "load_pct": 20},
+    {"id": "bounce", "kind": "modifier", "bounce": 2, "load_pct": 15},
+    {"id": "homing", "kind": "modifier", "homing": true, "load_pct": 10},
+    {"id": "heavy", "kind": "modifier", "damage_pct": 50, "area_pct": 30, "speed_pct": -30, "load_pct": 35},
+    {"id": "pierce", "kind": "modifier", "pierce": 2, "load_pct": 10},
+    {"id": "gravity", "kind": "modifier", "pull": 200, "load_pct": 15},
+    {"id": "echo", "kind": "modifier", "echo_ms": 1000, "damage_pct": -30, "load_pct": 40},
+    {"id": "twin", "kind": "formation", "arrange": "twin", "copies": 2, "load_pct": 30},
+    {"id": "fan", "kind": "formation", "arrange": "fan", "copies": 3, "load_pct": 45},
+    {"id": "ring", "kind": "formation", "arrange": "ring", "copies": 6, "load_pct": 90},
+    {"id": "behind", "kind": "formation", "arrange": "behind", "copies": 1},
+    {"id": "on_hit", "kind": "trigger", "on": "hit", "load_pct": 10},
+    {"id": "on_expire", "kind": "trigger", "on": "expire", "load_pct": 10},
+    {"id": "on_kill", "kind": "trigger", "on": "kill", "load_pct": 5},
+    {"id": "each_stride", "kind": "trigger", "on": "stride", "stride_px": 160},
+    {"id": "on_dash", "kind": "trigger", "on": "dash"},
+    {"id": "on_rune", "kind": "trigger", "on": "rune"},
+    {"id": "wormhole", "kind": "modifier", "wormhole": true, "load_pct": 20, "rare": true},
+    {"id": "clockwork", "kind": "trigger", "on": "clock", "every_ms": 2000, "rare": true},
+    {"id": "overcharge", "kind": "modifier", "damage_pct": 200, "load_pct": 150, "rare": true},
+    {"id": "afterburst", "kind": "modifier", "burst_pct": 60, "load_pct": 20, "rare": true},
+    {"id": "mirror", "kind": "formation", "arrange": "mirror", "copies": 2, "load_pct": 25, "rare": true},
+    {"id": "phantom_shot", "kind": "modifier", "pierce": 99, "damage_pct": -40, "load_pct": 15, "rare": true}
+  ],
+  "fields": {
+    "cap": 40,
+    "fire": {"ms": 2500, "radius": 50, "max_radius": 110, "tick_ms": 400, "damage_pct": 30},
+    "frost": {"ms": 3000, "radius": 60, "max_radius": 120, "tick_ms": 200, "slow_pct": 40},
+    "charge": {"ms": 2500, "radius": 50, "max_radius": 100, "tick_ms": 600, "damage_pct": 60},
+    "slick": {"ms": 5000, "radius": 70, "max_radius": 130, "tick_ms": 200, "slow_pct": 20},
+    "steam": {"ms": 2500, "radius": 80, "max_radius": 140, "tick_ms": 200, "slow_pct": 70},
+    "flare_pct": 300,
+    "conduct_pct": 100
+  },
+  "runes": {"sample_px": 24, "max_points": 160, "min_points": 10, "min_area": 9000, "corner_cos": 500, "ms": 20000, "stacks": 3, "damage": 30, "circle_armor": 1, "triangle_damage_pct": 6, "square_area_pct": 6}
 }

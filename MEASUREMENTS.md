@@ -70,6 +70,20 @@ A throwaway WebAssembly harness (not kept) ran a co-op Pathfinder and Breaker wi
 
 The system sampler put about two thirds of a late tick in `World::near` called from crowd separation: a list built and sorted for each of 320 enemies. Separation adds pushes, so the order does not matter, and it now walks the grid cells directly (`each_near`). The same bot run natively went from 645 µs to 287 µs a tick. Firefox and WebKit round `performance.now` to a millisecond, so their worst single tick is a timer step.
 
+## Round 3 balance probe (15 October 2026)
+
+`cargo test --release -p tool_core --test run_probe -- --ignored --nocapture`, after T14 and T15 added 7 abilities, 8 passives and 27 parts to the card pool. The bot takes the first card and never moves a part, so a trigger it takes sits in its spare parts.
+
+| Setting | Plain bot, 6 runs | Focused bots: evolved | Veteran, 6 runs | Co-op |
+| --- | --- | --- | --- | --- |
+| No upgrade card (first try) | won 0 | 1 of 6, at 9:39 | won 5 | not run |
+| `up_card_pct` 100, first build | won 1 | 5 of 6, 1:09 to 6:15 | won 5 | won at 14:55 |
+| `up_card_pct` 50 | won 0 | 2 of 6 | won 3 | lost at 9:36 |
+| `up_card_pct` 75 | won 0 | 1 of 6 | won 4 | lost at 6:43 |
+| `up_card_pct` 100, shipped | won 1 | 4 of 6, 1:29 to 11:52 | won 5 | won at 12:56 |
+
+Six runs a setting is a small sample: one seed's run changes with any change to the order the generator is drawn in. The shipped setting is the one closest to the playtest round's targets (plain 1 of 6, veteran 6 of 6, focused evolutions three to six minutes in).
+
 ## Not measured
 
 - Frame rate on a phone or an older laptop with many enemies on screen.

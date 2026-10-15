@@ -386,7 +386,12 @@ impl<W: Clone> Session<W> {
             }
             // inputs still in flight when a run ends are not an error
             Msg::In { .. } | Msg::Sum { .. } if !self.running => {}
-            Msg::In { from: start, keys, ack, at } => {
+            Msg::In {
+                from: start,
+                keys,
+                ack,
+                at,
+            } => {
                 let other = 1 - self.seat;
                 // the partner can be at most a window ahead of this browser
                 let limit = self.current + DELAY * 2 + MAX_AHEAD + MAX_BATCH as u32;
@@ -589,7 +594,10 @@ impl<W: Clone> Session<W> {
 
     /// Drops inputs that will never be needed again.
     fn prune(&mut self) {
-        let keep = self.confirmed().saturating_sub(4).min(self.acked.saturating_sub(4));
+        let keep = self
+            .confirmed()
+            .saturating_sub(4)
+            .min(self.acked.saturating_sub(4));
         for seat in 0..SEATS {
             while let Some((&t, _)) = self.known[seat].iter().next() {
                 // keep the newest known input for guesses
@@ -780,7 +788,10 @@ mod tests {
         assert_eq!(w.log.len(), 3, "a browser without the partner's input still runs");
         assert_eq!(w.log[0][0], 0);
         assert_eq!(w.log[1][0], 0);
-        assert_eq!(w.log[DELAY as usize][0], 2, "own input lands DELAY ticks after it is made");
+        assert_eq!(
+            w.log[DELAY as usize][0], 2,
+            "own input lands DELAY ticks after it is made"
+        );
     }
 
     #[test]
@@ -802,7 +813,11 @@ mod tests {
         let rig: u64 = 0x0123 << 48;
         host.record(1, DELAY, 0x22 | card | rig);
         assert_eq!(host.input_for(1, DELAY), 0x22 | card | rig);
-        assert_eq!(host.input_for(1, DELAY + 1), 0x22, "the guess drops the card and the rig change");
+        assert_eq!(
+            host.input_for(1, DELAY + 1),
+            0x22,
+            "the guess drops the card and the rig change"
+        );
     }
 
     #[test]
@@ -868,9 +883,16 @@ mod tests {
             let first = (0..c).find(|&t| wh.log[t] != wj.log[t]);
             assert_eq!(first, None, "lag {lag}: the copies used different inputs from tick {first:?} ({:?} against {:?}); confirmed {c}", first.map(|t| wh.log[t]), first.map(|t| wj.log[t]));
             if lag > 0 {
-                assert!(host.stats.rollbacks + join.stats.rollbacks > 0, "lag {lag}: never rolled back");
+                assert!(
+                    host.stats.rollbacks + join.stats.rollbacks > 0,
+                    "lag {lag}: never rolled back"
+                );
                 // ticks first run on a guess are checksummed once confirmed
-                assert!(host.sums.len() >= 3, "lag {lag}: only {} checksums", host.sums.len());
+                assert!(
+                    host.sums.len() >= 3,
+                    "lag {lag}: only {} checksums",
+                    host.sums.len()
+                );
             }
             assert_eq!(host.status, PLAYING, "lag {lag}");
             assert_eq!(join.status, PLAYING, "lag {lag}");
@@ -910,7 +932,11 @@ mod tests {
             let out = join.take_outbox();
             deliver(&mut host, JOINER, out);
         }
-        assert!(host.sums.len() >= 5, "checksums were taken: {:?}", host.sums.keys());
+        assert!(
+            host.sums.len() >= 5,
+            "checksums were taken: {:?}",
+            host.sums.keys()
+        );
         assert_eq!(host.status, PLAYING);
     }
 

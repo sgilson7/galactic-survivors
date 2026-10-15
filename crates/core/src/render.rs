@@ -6,6 +6,7 @@
 
 use crate::content::Content;
 use crate::draw::{sprite, Align, Color, DrawList};
+use crate::field::FieldKind;
 use crate::fx;
 use crate::game::Game;
 use crate::geom::{SUB, V};
@@ -143,6 +144,37 @@ pub fn frame(g: &Game) -> Vec<i32> {
         }
     }
 
+    // ground fields: flat patches, under everything that moves (T14)
+    for f in &w.fields {
+        let at = cam.at(f.pos);
+        let r = cam.len(f.radius);
+        if !cam.on(at, r) {
+            continue;
+        }
+        let fade = (f.left * 1000 / f.full.max(1)).clamp(0, 1000);
+        let color = match f.kind {
+            FieldKind::Fire => Color::Fire,
+            FieldKind::Frost => Color::Frost,
+            FieldKind::Charge => Color::Charge,
+            FieldKind::Slick => Color::Slick,
+            FieldKind::Steam => Color::Steam,
+        };
+        d.circle(at.0, at.1, r, color, color, 2, 120 + fade * 2 / 10);
+    }
+
+    // the local player's rune trail: a faint line, so a loop can be seen forming
+    if let Some(me) = w.players.get(g.seat) {
+        if me.trail.len() > 1 {
+            let pts: Vec<(i32, i32)> = me
+                .trail
+                .iter()
+                .chain(std::iter::once(&me.pos))
+                .map(|p| cam.at(*p))
+                .collect();
+            d.line(&pts, Color::Trail, 2, 350);
+        }
+    }
+
     // the players' own effects, faint so they never hide a threat
     for e in &w.effects {
         let at = cam.at(e.pos);
@@ -199,6 +231,23 @@ pub fn frame(g: &Game) -> Vec<i32> {
             EffectKind::Turret => {
                 d.circle(at.0, at.1, cam.len(12), Color::Panel, Color::Ink, 3, 1000);
                 d.circle(at.0, at.1, cam.len(5), Color::Bolt, Color::Ink, 1, 1000);
+            }
+            EffectKind::Strike => {
+                // a mark that tightens as the strike comes
+                let r = cam.len(e.radius);
+                d.circle(at.0, at.1, r, Color::None, Color::Ring, 2, 500);
+                d.circle(at.0, at.1, r * fade / 1000 + 2, Color::None, Color::Ring, 1, 700);
+            }
+            EffectKind::Well => {
+                let r = cam.len(e.radius);
+                d.circle(at.0, at.1, r, Color::Ink, Color::Ring, 2, 350);
+                d.circle(at.0, at.1, r / 3, Color::Ink, Color::Ring, 2, 600);
+            }
+            EffectKind::Tether => {
+                if e.points.len() == 2 {
+                    let (a, b) = (cam.at(e.points[0]), cam.at(e.points[1]));
+                    d.line(&[a, b], Color::Charge, cam.len(e.width.max(2)), 600);
+                }
             }
         }
     }

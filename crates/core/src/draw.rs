@@ -61,12 +61,19 @@ pub enum Color {
     Ticket,
     Cache,
     Rock,
+    /// Ground fields and the rune trail (T14).
+    Fire,
+    Frost,
+    Charge,
+    Slick,
+    Steam,
+    Trail,
 }
 
-pub const PALETTE: [&str; 25] = [
+pub const PALETTE: [&str; 31] = [
     "none", "ink", "ground", "panel", "text", "muted", "hp", "hp-back", "xp", "shot", "shot-rim", "bolt",
     "ring", "gold", "heal", "rift", "raid", "boss", "flash", "shadow", "seat0", "seat1", "ticket", "cache",
-    "rock",
+    "rock", "fire", "frost", "charge", "slick", "steam", "trail",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,7 +320,7 @@ mod tests {
 
     #[test]
     fn the_palette_has_one_role_per_colour() {
-        assert_eq!(PALETTE.len(), Color::Rock as usize + 1);
+        assert_eq!(PALETTE.len(), Color::Trail as usize + 1);
         assert_eq!(PALETTE[Color::Shot as usize], "shot");
         assert_eq!(PALETTE[Color::Seat1 as usize], "seat1");
     }

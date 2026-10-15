@@ -432,7 +432,10 @@ fn in_co_op_the_chooser_is_shielded_until_they_move_after_choosing() {
     assert!(w.players[0].offer.is_none());
     w.step(&c, &still);
     w.hurt_player(&c, 0, 50);
-    assert_eq!(w.players[0].hp, hp, "standing still after choosing keeps the shield");
+    assert_eq!(
+        w.players[0].hp, hp,
+        "standing still after choosing keeps the shield"
+    );
     // the first step after choosing ends it
     let walk = [
         Input {
