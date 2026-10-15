@@ -19,7 +19,9 @@
 //! * field: a payload that fired after a field modifier left that field
 //!   somewhere in the scene (or reacted with another field); a tether is
 //!   left out (alone it joins nothing), and so is a mine still waiting;
-//!   after a Wormhole a miss is only noted, since the payload may hit nothing;
+//!   after a Wormhole a miss is only noted, since the payload may hit nothing,
+//!   and so is a miss by a payload that hit nothing because another payload
+//!   in the same firing killed or knocked away its targets first;
 //! * formation: on the first tick, a payload after a formation makes the
 //!   formation's copies times what it makes alone.
 //!
@@ -156,6 +158,12 @@ pub fn play(
             if !seen.contains(&s.ability) {
                 seen.push(s.ability.clone());
             }
+            if !s.hit.is_empty() {
+                let hit = format!("hit:{}", s.ability);
+                if !seen.contains(&hit) {
+                    seen.push(hit);
+                }
+            }
         }
         for f in w.fields.iter().filter(|f| f.seat == 0) {
             let id = format!("field:{}", f.kind.name());
@@ -166,6 +174,12 @@ pub fn play(
         for e in w.effects.iter().filter(|e| e.seat == 0) {
             if !seen.contains(&e.ability) {
                 seen.push(e.ability.clone());
+            }
+            if !e.hits.is_empty() {
+                let hit = format!("hit:{}", e.ability);
+                if !seen.contains(&hit) {
+                    seen.push(hit);
+                }
             }
         }
         t.most_shots = t.most_shots.max(w.shots.len());
@@ -398,7 +412,7 @@ pub fn judge(c: &Content, row: &[String], level: i32, deep: bool) -> Played {
     }
     if let Some(s) = seen
         .iter()
-        .find(|s| *s != "rune" && !s.starts_with("field:") && !row.contains(s))
+        .find(|s| *s != "rune" && !s.starts_with("field:") && !s.starts_with("hit:") && !row.contains(s))
     {
         out.failures.push(format!("stray: a {s} that is not in the rig"));
     }
@@ -431,8 +445,12 @@ pub fn judge(c: &Content, row: &[String], level: i32, deep: bool) -> Played {
             {
                 let why = format!("field: {} left no {} field", row[at], kind.field);
                 // out of a wormhole a payload flies at the player and may hit
-                // nothing, and nothing hit is nothing landed on
-                if row[..at].iter().any(|id| id == "wormhole") {
+                // nothing, and nothing hit is nothing landed on. So may a
+                // payload whose targets another payload in the same firing
+                // killed or knocked away first (found by the logbook: Swarm
+                // Battery clearing a Boomerang Disc's path).
+                let crowded = first.len() > 1 && !seen.contains(&format!("hit:{}", row[at]));
+                if crowded || row[..at].iter().any(|id| id == "wormhole") {
                     out.notes.push(why);
                 } else {
                     out.failures.push(why);
@@ -455,7 +473,7 @@ pub fn judge(c: &Content, row: &[String], level: i32, deep: bool) -> Played {
     out.kills = p.record.kills;
     out.payloads = seen
         .iter()
-        .filter(|s| !s.starts_with("field:"))
+        .filter(|s| !s.starts_with("field:") && !s.starts_with("hit:"))
         .cloned()
         .collect();
     out.fields = seen

@@ -228,7 +228,36 @@ const FOUND: &[(&str, i32)] = &[
     // a tether fired by a hit during the effects update removed the old
     // tether from the list being walked: a panic (T18)
     ("orbital_lance on_hit tether", 1),
+    // Swarm Battery, in the same firing, killed or knocked away everything
+    // in the disc's path, so the disc hit nothing and left no field: a
+    // note, not a failure (R4.19)
+    ("ignite overcharge boomerang_disc fan swarm_battery", 1),
+    ("oil boomerang_disc overcharge fan swarm_battery", 1),
+    ("overcharge oil boomerang_disc ring swarm_battery", 1),
+    ("ignite boomerang_disc overcharge ring swarm_battery", 1),
+    ("oil boomerang_disc fan ground_slam overcharge", 1),
+    ("oil boomerang_disc ring swarm_battery overcharge", 1),
 ];
+
+/// The excuse for a crowded payload covers only a payload that hit
+/// nothing: with Oil's slick switched off, a disc that hits beside Swarm
+/// Battery still breaks the field rule (R4.19).
+#[test]
+fn a_payload_that_hit_but_left_no_field_fails_even_beside_another() {
+    let mut c = quiet();
+    c.fields.slick.ms = 0;
+    let row: Vec<String> = "oil boomerang_disc fan swarm_battery"
+        .split(' ')
+        .map(|s| s.to_string())
+        .collect();
+    let p = judge(&c, &row, 1, false);
+    assert!(
+        p.failures.iter().any(|f| f == "field: boomerang_disc left no slick field"),
+        "{:?} {:?}",
+        p.failures,
+        p.notes
+    );
+}
 
 #[test]
 fn rigs_the_logbook_found_keep_every_rule() {

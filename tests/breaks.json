@@ -747,5 +747,19 @@
     "find": "            \"coop.by_invitation\" => {\n                self.room.clear();\n                self.last_try.clear();\n            }",
     "replace": "            \"coop.by_invitation\" => {}",
     "test": "a_room_made_by_invitation_offers_no_code_to_copy_or_retry"
+  },
+  {
+    "name": "a payload crowded out by another must still leave its field (R4.19)",
+    "file": "crates/core/tests/support/rig_rules.rs",
+    "find": "                let crowded = first.len() > 1 && !seen.contains(&format!(\"hit:{}\", row[at]));",
+    "replace": "                let crowded = false;",
+    "test": "rigs_the_logbook_found_keep_every_rule"
+  },
+  {
+    "name": "a crowded payload that did hit is excused anyway (R4.19)",
+    "file": "crates/core/tests/support/rig_rules.rs",
+    "find": "                let crowded = first.len() > 1 && !seen.contains(&format!(\"hit:{}\", row[at]));",
+    "replace": "                let crowded = first.len() > 1;",
+    "test": "a_payload_that_hit_but_left_no_field_fails_even_beside_another"
   }
 ]
