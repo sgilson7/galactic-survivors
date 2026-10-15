@@ -51,6 +51,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `./scripts/check.sh`, after round 4 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026, in 1 min 44 s |
 | `./scripts/count-tests.sh`, after round 4 | 178 passed, 0 failed, 2 ignored (the probe and the rig sweep) |
 | `python3 scripts/break_tests.py`, after round 4 | 87 of 87 planted defects caught |
+| Live check after publishing 8a320ea (`BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py`) | PASSED in all three engines |
 | Rig sweeps, after round 4 (`rig_space` `sweep`) | every rig of 3 tokens at levels 1 and 5, and of 4 tokens at level 1 (8,772,732), and 200,000 each of 5 and 6: no rule broken |
 | `./scripts/check.sh`, after round 3 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `python3 tests/browser/online.py chromium firefox webkit`, after round 3 (rollback and the fast channel) | ONLINE CHECK PASSED |
