@@ -37,10 +37,21 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 - **New content.** 7 abilities, 8 passives, 4 ground fields that react (fire, frost, charge, slick, and steam from fire meeting frost), and 3 runes drawn by walking a loop.
 - **A faster tick.** Crowd separation no longer sorts a list for every enemy; a late tick is about half the time it was.
 
+## What changed in round 4 (15 October 2026, TRIAGE T16–T18)
+
+- **The first ability sets a rig's recharge** (T16, R4.1), not the slowest. A rig with no ability before its first trigger is idle.
+- **A rig space test** (T17, `crates/core/tests/rig_space.rs`) plays any rig for four seconds in one fixed scene against ten rules. The everyday test plays 4,811 rigs in 0.6 s. The ignored `sweep` plays a whole length or a sample: `RIG_LEN=4 cargo test -p tool_core --test rig_space -- --ignored --nocapture`. Rates and coverage are in MEASUREMENTS and the journal's sixth tab.
+- **Three bugs it found, fixed:** a Wormhole shot spent itself on the enemy it came out of (R4.2); a formation dropped Wake Mines while the player stood still (R4.3). Two design questions went to the person (R4.4, R4.5).
+- **The logbook** (T18) is designed in the journal's sixth tab, not built (R4.8).
+
 ## What passed
 
 | Check | Result |
 | --- | --- |
+| `./scripts/check.sh`, after round 4 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026, in 1 min 44 s |
+| `./scripts/count-tests.sh`, after round 4 | 178 passed, 0 failed, 2 ignored (the probe and the rig sweep) |
+| `python3 scripts/break_tests.py`, after round 4 | 87 of 87 planted defects caught |
+| Rig sweeps, after round 4 (`rig_space` `sweep`) | every rig of 3 tokens at levels 1 and 5, and of 4 tokens at level 1 (8,772,732), and 200,000 each of 5 and 6: no rule broken |
 | `./scripts/check.sh`, after round 3 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `python3 tests/browser/online.py chromium firefox webkit`, after round 3 (rollback and the fast channel) | ONLINE CHECK PASSED |
 | `./scripts/count-tests.sh`, after round 3 | 174 passed, 0 failed, 1 ignored (the probe) |
@@ -83,6 +94,9 @@ From the first build:
 
 ## Rows for the person
 
+- R4.4: formations on Tether do nothing but add load.
+- R4.5: field modifiers on Orbit Drones, Halo Guard and Tether do nothing but add load.
+- R4.8: whether to build the rig logbook, and where its full log lives.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
 - R3.18: the names and texts of the new content were written by the agent.

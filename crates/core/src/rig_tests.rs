@@ -181,6 +181,44 @@ fn every_part_adds_its_load_to_the_recharge() {
 }
 
 #[test]
+fn a_wormhole_shot_passes_the_enemy_it_came_out_of() {
+    let c = quiet();
+    let mut w = solo(&c);
+    let far = post(&c, &mut w, 400, 0);
+    let near = post(&c, &mut w, 150, 0);
+    rig(&c, &mut w, &["wormhole", "seeker_rifle"]);
+    w.players[0].invulnerable = 1_000;
+    for _ in 0..30 {
+        w.step(&c, &[Input::default()]);
+    }
+    assert_eq!(
+        w.foes[far].hp, w.foes[far].max_hp,
+        "the shot starts inside it and passes it"
+    );
+    assert!(
+        w.foes[near].hp < w.foes[near].max_hp,
+        "and flies on toward the player"
+    );
+}
+
+#[test]
+fn the_first_payload_sets_the_recharge_not_the_slowest() {
+    let c = quiet();
+    let mut w = solo(&c);
+    // Seeker Rifle level 1: 600 ms is 36 ticks; Ricochet Disc 1600 ms is 96
+    rig(&c, &mut w, &["seeker_rifle", "ricochet_disc"]);
+    assert_eq!(w.rig_cooldown(&c, 0, 0), Some(36));
+    rig(&c, &mut w, &["ricochet_disc", "seeker_rifle"]);
+    assert_eq!(w.rig_cooldown(&c, 0, 0), Some(96));
+    // a modifier before the first payload still adds its load: ignite 15%
+    rig(&c, &mut w, &["ignite", "seeker_rifle", "ricochet_disc"]);
+    assert_eq!(w.rig_cooldown(&c, 0, 0), Some(36 * 115 / 100));
+    // no payload before the first trigger: the rig never fires, so no recharge
+    rig(&c, &mut w, &["ignite", "on_hit", "seeker_rifle"]);
+    assert_eq!(w.rig_cooldown(&c, 0, 0), None);
+}
+
+#[test]
 fn a_new_part_goes_where_it_works_and_a_trigger_to_the_spare_parts() {
     let c = quiet();
     let mut w = solo(&c);
@@ -255,6 +293,25 @@ fn the_wake_mine_drops_only_while_moving_and_behind_the_player() {
         .find(|e| e.kind == EffectKind::Bomb)
         .expect("a mine");
     assert!(mine.pos.x < w.players[0].pos.x, "behind a player facing right");
+}
+
+#[test]
+fn a_formation_drops_no_wake_mine_while_the_player_stands_still() {
+    let c = quiet();
+    for form in ["twin", "fan", "ring", "behind", "mirror"] {
+        let mut w = solo(&c);
+        rig(&c, &mut w, &[form, "wake_mine"]);
+        w.players[0].moving = false;
+        w.fire_rigs(&c);
+        assert!(w.effects.iter().all(|e| e.kind != EffectKind::Bomb), "{form}");
+        w.players[0].moving = true;
+        w.players[0].rigs[0].cd = 0;
+        w.fire_rigs(&c);
+        assert!(
+            w.effects.iter().any(|e| e.kind == EffectKind::Bomb),
+            "{form} while moving"
+        );
+    }
 }
 
 #[test]

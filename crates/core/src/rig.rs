@@ -21,7 +21,7 @@
 //! so both co-op browsers make the same move on the same tick.
 
 use crate::arsenal::Scaled;
-use crate::content::{Arrange, Content, On, Part, PartKind};
+use crate::content::{Aim, Arrange, Content, On, Part, PartKind};
 use crate::field::FieldKind;
 use crate::geom::{px, ticks, V};
 use crate::world::{Rig, World};
@@ -316,25 +316,31 @@ impl World {
         (sockets.len(), None)
     }
 
-    /// A rig's recharge in ticks: its slowest payload before any player
-    /// trigger, plus every part's load. None when it has no payload there.
+    /// A rig's recharge in ticks: the first payload sets it (T16), plus
+    /// every part's load. None when no payload comes before the first
+    /// trigger, since then the rig never fires on its recharge.
     pub fn rig_cooldown(&self, content: &Content, seat: usize, r: usize) -> Option<i32> {
         let rig = self.players[seat].rigs.get(r)?;
-        let (cut, _) = self.split_rig(content, &rig.sockets);
-        let slowest = rig.sockets[..cut]
+        let first = rig
+            .sockets
             .iter()
-            .filter_map(|id| {
+            .take_while(|s| {
+                content
+                    .part(s)
+                    .map(|p| p.kind != PartKind::Trigger)
+                    .unwrap_or(true)
+            })
+            .find_map(|id| {
                 let level = self.players[seat].abilities.iter().find(|a| &a.id == id)?.level;
                 Some(self.scaled(content, seat, id, level)?.cooldown)
-            })
-            .max()?;
+            })?;
         let load: i32 = rig
             .sockets
             .iter()
             .filter_map(|s| content.part(s))
             .map(|p| p.load_pct)
             .sum();
-        Some((slowest * (100 + load.max(0)) / 100).max(1))
+        Some((first * (100 + load.max(0)) / 100).max(1))
     }
 
     /// Every rig's tick: recharge, fire, and the player events.
@@ -636,6 +642,7 @@ impl World {
     ) -> bool {
         let mut from = from;
         let mut aim: Option<V> = None;
+        let mut source = None;
         if wormhole {
             // from the farthest enemy in reach, toward the player
             let me = self.players[seat].pos;
@@ -644,15 +651,44 @@ impl World {
                 .iter()
                 .filter(|f| f.hp > 0 && crate::geom::within(f.pos, me, px(520)))
                 .max_by_key(|f| (crate::geom::dist2(f.pos, me), std::cmp::Reverse(f.id)))
-                .map(|f| f.pos);
-            if let Some(p) = far {
+                .map(|f| (f.pos, f.id));
+            if let Some((p, foe)) = far {
                 from = Origin {
                     pos: p,
                     player: false,
                 };
                 aim = Some(me.sub(p));
+                source = Some(foe);
             }
         }
+        // a mine dropped behind a moving player is not dropped while they
+        // stand still, however many copies a formation asks for (T17)
+        if form.is_some() && from.player && s.aim == Aim::Behind && !self.players[seat].moving {
+            return false;
+        }
+        let first = self.shots.len();
+        let any = self.fire_arranged(content, seat, id, s, from, aim, form);
+        // a shot out of a wormhole passes the enemy it came out of (T17)
+        if let Some(foe) = source {
+            for shot in &mut self.shots[first..] {
+                shot.hit.push(foe);
+            }
+        }
+        any
+    }
+
+    /// Fires a payload once, or as its formation lays out the copies.
+    #[allow(clippy::too_many_arguments)]
+    fn fire_arranged(
+        &mut self,
+        content: &Content,
+        seat: usize,
+        id: &str,
+        s: &Scaled,
+        from: Origin,
+        aim: Option<V>,
+        form: Option<(Arrange, i32)>,
+    ) -> bool {
         let Some((arrange, n)) = form else {
             return self.fire_one(content, seat, id, s, from, aim);
         };

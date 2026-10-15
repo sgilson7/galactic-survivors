@@ -551,5 +551,61 @@
     "find": "if rarity == Rarity::Epic && !closed.is_empty() && self.rng.chance(content.cache.part_pct, 100) {",
     "replace": "if false {",
     "test": "an_epic_pull_can_open_a_rare_part_once_and_it_joins_the_cards"
+  },
+  {
+    "name": "the rig recharge follows a later payload",
+    "file": "crates/core/src/rig.rs",
+    "find": "            .find_map(|id| {\n                let level = self.players[seat].abilities",
+    "replace": "            .collect::<Vec<_>>()\n            .into_iter()\n            .rev()\n            .find_map(|id| {\n                let level = self.players[seat].abilities",
+    "test": "the_first_payload_sets_the_recharge_not_the_slowest"
+  },
+  {
+    "name": "the rig recharge reads past a hit trigger",
+    "file": "crates/core/src/rig.rs",
+    "find": "                    .map(|p| p.kind != PartKind::Trigger)\n",
+    "replace": "                    .map(|p| !(p.kind == PartKind::Trigger && p.on.is_player()))\n",
+    "test": "the_first_payload_sets_the_recharge_not_the_slowest"
+  },
+  {
+    "name": "rig space: the recharge follows the slowest payload",
+    "file": "crates/core/src/rig.rs",
+    "find": "            .find_map(|id| {\n                let level = self.players[seat].abilities.iter().find(|a| &a.id == id)?.level;\n                Some(self.scaled(content, seat, id, level)?.cooldown)\n            })?;",
+    "replace": "            .filter_map(|id| {\n                let level = self.players[seat].abilities.iter().find(|a| &a.id == id)?.level;\n                Some(self.scaled(content, seat, id, level)?.cooldown)\n            })\n            .max()?;",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "rig space: an empty socket ends the rig",
+    "file": "crates/core/src/rig.rs",
+    "find": "            if tok.is_empty() {\n                continue;\n            }",
+    "replace": "            if tok.is_empty() {\n                return fired;\n            }",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "a wormhole shot hits the enemy it came out of",
+    "file": "crates/core/src/rig.rs",
+    "find": "                shot.hit.push(foe);",
+    "replace": "                let _ = (&shot, foe);",
+    "test": "a_wormhole_shot_passes_the_enemy_it_came_out_of"
+  },
+  {
+    "name": "a formation drops wake mines while standing still",
+    "file": "crates/core/src/rig.rs",
+    "find": "        if form.is_some() && from.player && s.aim == Aim::Behind && !self.players[seat].moving {",
+    "replace": "        if form.is_some() && from.player && s.aim == Aim::Behind && !self.players[seat].moving && false {",
+    "test": "a_formation_drops_no_wake_mine_while_the_player_stands_still"
+  },
+  {
+    "name": "rig space: a formation drops wake mines while standing still",
+    "file": "crates/core/src/rig.rs",
+    "find": "        if form.is_some() && from.player && s.aim == Aim::Behind && !self.players[seat].moving {",
+    "replace": "        if form.is_some() && from.player && s.aim == Aim::Behind && !self.players[seat].moving && false {",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
+  },
+  {
+    "name": "rig space: a field modifier leaves no field",
+    "file": "crates/core/src/rig.rs",
+    "find": "        if let Some(f) = FieldKind::parse(&p.field) {",
+    "replace": "        if let Some(f) = FieldKind::parse(&p.field).filter(|_| false) {",
+    "test": "every_short_rig_and_a_sample_of_long_ones_keep_every_rule"
   }
 ]

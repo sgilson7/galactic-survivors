@@ -84,6 +84,43 @@ The system sampler put about two thirds of a late tick in `World::near` called f
 
 Six runs a setting is a small sample: one seed's run changes with any change to the order the generator is drawn in. The shipped setting is the one closest to the playtest round's targets (plain 1 of 6, veteran 6 of 6, focused evolutions three to six minutes in).
 
+## Test times and the rig space (15 October 2026, T17)
+
+On this machine (12 cores), with the test profile (`opt-level = 2`, overflow checks on).
+
+| What runs | Time |
+| --- | --- |
+| `cargo test`, nothing changed | 1.4 s |
+| `cargo test` after touching a core file | about 6 s, almost all compiling |
+| The core's rule tests, one at a time (`--exact`, process start taken off) | 0.21 s in all; slowest `every_screen_finds_all_its_strings` 36 ms, `the_same_seed_and_inputs_give_the_same_world` 34 ms, `a_laggy_lossy_co_op_run_stays_in_step_and_keeps_moving` 34 ms; the rig tests about 1 ms in all |
+| `python3 scripts/break_tests.py` (87 breaks, each recompiles) | 8 min 24 s |
+| `./scripts/check.sh` | 1 min 44 s |
+
+The rig space (`crates/core/tests/rig_space.rs`): 29 payloads (24 abilities, 5 evolutions) and 27 parts; a rig is 1–6 tokens with at least one payload and no payload twice. Rigs: 29 of one token, 2,378 of two, 151,119 of three, 8,772,732 of four, 487,914,705 of five, 26,484,087,078 of six. With each payload at its own level (1–5), four tokens are 752,447,340.
+
+Rate, rigs a second, each played for 240 ticks (four-token sample):
+
+| Gap and rollback rules | 1 thread | 12 threads |
+| --- | --- | --- |
+| none | 1,292 | 11,090 |
+| 1 rig in 4 (default) | 938 | 8,056–8,330 |
+| every rig | 514 | 4,459 |
+
+From one token to six the default rate stayed between 7,710 and 8,537 a second.
+
+Sweeps run, every one with no rule broken:
+
+| Sweep | Rigs | Time |
+| --- | --- | --- |
+| Everyday test (lengths 1–2 whole, 400 each of 3 and 4; half again at level 5) | 4,811 plays | 0.6 s |
+| Length 3, level 1 | 151,119 | 18.5 s |
+| Length 3, level 5 | 151,119 | 18.1 s |
+| Length 4, level 1 | 8,772,732 | 18 min 34 s (7,878 a second; most 300 shots, 540 effects, 17 echoes at once) |
+| Length 5, sample of 200,000 | 200,000 | 24.5 s |
+| Length 6, sample of 200,000 | 200,000 | 24.9 s |
+
+At 8,200 a second: all of length 5 takes 16.5 hours, all of length 6 37 days, and all four-token rigs at every level 1.1 days. A tweak to one part's numbers touches 6.7% of four-token rigs, one ability's 7.4%.
+
 ## Not measured
 
 - Frame rate on a phone or an older laptop with many enemies on screen.

@@ -30,7 +30,7 @@ Two players in one run, each in their own browser, connected directly to each ot
 
 ### Rig
 
-A row of sockets that fires on its own, read left to right each time. A player has one rig for each ability slot. Each part in a rig adds to its recharge.
+A row of sockets that fires on its own, read left to right each time. A player has one rig for each ability slot. The first ability in a rig sets its recharge, and each part adds to it.
 
 ### Socket
 
