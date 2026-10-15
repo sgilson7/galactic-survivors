@@ -37,7 +37,7 @@ pub const HELD_MASK: u64 = 0xff_ffff_ffff;
 
 /// Bumped whenever a message changes shape or a rule changes how a tick
 /// runs. `web/net/config.js` carries the same number (online_fence.rs).
-pub const PROTOCOL: u32 = 2;
+pub const PROTOCOL: u32 = 3;
 
 /// Ticks between a local input and the tick that uses it: 33 ms at 60
 /// ticks a second. It hides part of the trip, so short trips need no
@@ -80,9 +80,10 @@ pub enum Msg {
         protocol: u32,
         build: String,
     },
-    /// The joiner's loadout, sent after the hello and again when it changes.
-    Load {
-        load: Loadout,
+    /// The sender's seat in the lobby, sent after the hello and again when
+    /// any of it changes (T24). Both players send it.
+    Seat {
+        seat: Seat,
     },
     /// The host starts the run: the seed and both loadouts, host first.
     Start {
@@ -160,10 +161,53 @@ pub fn make_code(mut n: u64) -> String {
     s
 }
 
+/// The most characters a player's name keeps.
+pub const NAME_CHARS: usize = 16;
+
+/// Where a player is in the menus, as the lobby shows it: a lobby tab or
+/// a screen. Anything else is shown as "in the menus".
+pub const PLACES: &[&str] = &["character", "gear", "shop"];
+
+/// One player in the lobby, as the other sees them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Seat {
+    pub load: Loadout,
+    pub name: String,
+    /// The joiner has said they are ready; the host's is ignored.
+    pub ready: bool,
+    /// One of `PLACES`, or empty.
+    pub at: String,
+}
+
+/// A name as players see it: no control characters, single spaces, at
+/// most `NAME_CHARS` characters. A name from the partner is cleaned too.
+pub fn clean_name(name: &str) -> String {
+    let shown: String = name.chars().filter(|c| !c.is_control()).collect();
+    let words: Vec<&str> = shown.split_whitespace().collect();
+    words
+        .join(" ")
+        .chars()
+        .take(NAME_CHARS)
+        .collect::<String>()
+        .trim_end()
+        .to_string()
+}
+
+impl Seat {
+    /// The seat with its name and place made safe to show.
+    pub fn cleaned(mut self) -> Seat {
+        self.name = clean_name(&self.name);
+        if !PLACES.contains(&self.at.as_str()) {
+            self.at.clear();
+        }
+        self
+    }
+}
+
 /// What a browser learned from a message that the game must act on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    PeerLoad(Loadout),
+    PeerSeat(Seat),
     Start { seed: u64, loads: Vec<Loadout> },
 }
 
@@ -278,10 +322,10 @@ impl<W: Clone> Session<W> {
         }
     }
 
-    /// Sends this browser's loadout to the other (the joiner does this).
-    pub fn send_load(&mut self, load: &Loadout) {
+    /// Sends this browser's seat to the other.
+    pub fn send_seat(&mut self, seat: &Seat) {
         if let Some(peer) = self.peer {
-            self.send(peer, &Msg::Load { load: load.clone() });
+            self.send(peer, &Msg::Seat { seat: seat.clone() });
         }
     }
 
@@ -360,13 +404,7 @@ impl<W: Clone> Session<W> {
             _ if self.peer != Some(from) => {
                 self.status = GARBLED;
             }
-            Msg::Load { load } => {
-                if self.seat == 0 {
-                    self.events.push_back(Event::PeerLoad(load));
-                } else {
-                    self.status = GARBLED;
-                }
-            }
+            Msg::Seat { seat } => self.events.push_back(Event::PeerSeat(seat.cleaned())),
             Msg::Start { seed, loads } => {
                 if self.seat == 1 && loads.len() == SEATS {
                     self.begin();
@@ -692,16 +730,52 @@ mod tests {
     }
 
     #[test]
+    fn a_partner_name_and_place_are_cleaned_before_they_are_shown() {
+        assert_eq!(clean_name("  Ana \u{7}  Maria  "), "Ana Maria");
+        assert_eq!(clean_name("abcdefghijklmnopqrst"), "abcdefghijklmnop");
+        // cut at sixteen characters, then the trailing space goes
+        assert_eq!(clean_name("abcdefghijklmno pq"), "abcdefghijklmno");
+        let s = Seat {
+            name: "\u{1b}[2J Zed".into(),
+            at: "anywhere".into(),
+            ..Seat::default()
+        }
+        .cleaned();
+        assert_eq!((s.name.as_str(), s.at.as_str()), ("[2J Zed", ""));
+        // a seat that arrives is cleaned before the game sees it
+        let (mut host, _) = pair("b", "b");
+        let raw = encode(&Msg::Seat {
+            seat: Seat {
+                name: "\u{1b}[2J Zed".into(),
+                ready: true,
+                at: "cellar".into(),
+                ..Seat::default()
+            },
+        });
+        host.message(JOINER, &raw, 0);
+        let got = host.take_events();
+        assert!(
+            matches!(&got[..], [Event::PeerSeat(s)] if s.name == "[2J Zed" && s.at.is_empty() && s.ready),
+            "{got:?}"
+        );
+    }
+
+    #[test]
     fn every_message_round_trips() {
         let all = [
             Msg::Hello {
                 protocol: PROTOCOL,
                 build: "abc".into(),
             },
-            Msg::Load {
-                load: Loadout {
-                    character: "vector".into(),
-                    ..Loadout::default()
+            Msg::Seat {
+                seat: Seat {
+                    load: Loadout {
+                        character: "vector".into(),
+                        ..Loadout::default()
+                    },
+                    name: "Ana".into(),
+                    ready: true,
+                    at: "gear".into(),
                 },
             },
             Msg::Start {
@@ -973,10 +1047,19 @@ mod tests {
             character: "breaker".into(),
             ..Loadout::default()
         };
-        join.send_load(&load);
+        let seat = Seat {
+            load: load.clone(),
+            ..Seat::default()
+        };
+        join.send_seat(&seat);
         let out = join.take_outbox();
         deliver(&mut host, JOINER, out);
-        assert_eq!(host.take_events(), vec![Event::PeerLoad(load.clone())]);
+        assert_eq!(host.take_events(), vec![Event::PeerSeat(seat.clone())]);
+        // the host's seat goes the other way
+        host.send_seat(&Seat::default());
+        let out = host.take_outbox();
+        deliver(&mut join, HOST, out);
+        assert_eq!(join.take_events(), vec![Event::PeerSeat(Seat::default())]);
         host.start(42, vec![Loadout::default(), load.clone()]);
         let out = host.take_outbox();
         deliver(&mut join, HOST, out);

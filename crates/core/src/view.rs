@@ -172,7 +172,15 @@ fn title(g: &Game, ui: &mut Ui) {
         kind: "menu".into(),
         actions: vec![
             primary(act("screen.show", "hangar", t.get("menu.solo"))),
-            act("screen.show", "coop", t.get("menu.coop")),
+            act(
+                "screen.show",
+                "coop",
+                t.get(if g.in_room() {
+                    "menu.coop_room"
+                } else {
+                    "menu.coop"
+                }),
+            ),
             act("screen.show", "gear", t.get("menu.gear")),
             act("screen.show", "shop", t.get("menu.shop")),
             act("screen.show", "cache", t.get("menu.cache")),
@@ -395,6 +403,25 @@ fn gear(g: &Game, ui: &mut Ui) {
             .collect(),
         ..Panel::default()
     });
+    gear_body(g, ui);
+    ui.panels.push(Panel {
+        id: "nav".into(),
+        kind: "bar".into(),
+        actions: vec![
+            back(g),
+            act("screen.show", "cache", t.get("menu.cache")),
+            primary(act("screen.show", "hangar", t.get("gear.to_hangar"))),
+        ],
+        ..Panel::default()
+    });
+}
+
+/// The worn gear, the bag and the chosen piece: the gear screen without its
+/// tabs and bar, also shown in the co-op lobby (T24).
+fn gear_body(g: &Game, ui: &mut Ui) {
+    let c = &g.content;
+    let t = &g.text;
+    let ch = &g.save.character;
     ui.panels.push(Panel {
         id: "doll".into(),
         kind: "doll".into(),
@@ -458,16 +485,6 @@ fn gear(g: &Game, ui: &mut Ui) {
         )],
     });
     ui.panels.push(gear_detail(g));
-    ui.panels.push(Panel {
-        id: "nav".into(),
-        kind: "bar".into(),
-        actions: vec![
-            back(g),
-            act("screen.show", "cache", t.get("menu.cache")),
-            primary(act("screen.show", "hangar", t.get("gear.to_hangar"))),
-        ],
-        ..Panel::default()
-    });
 }
 
 fn gear_detail(g: &Game) -> Panel {
@@ -578,6 +595,17 @@ fn next_rank_hint(g: &Game, id: &str) -> String {
 }
 
 fn shop(g: &Game, ui: &mut Ui) {
+    shop_body(g, ui);
+    ui.panels.push(Panel {
+        id: "nav".into(),
+        kind: "bar".into(),
+        actions: vec![back(g)],
+        ..Panel::default()
+    });
+}
+
+/// The Outfitter's ranks, also shown in the co-op lobby (T24).
+fn shop_body(g: &Game, ui: &mut Ui) {
     let c = &g.content;
     let t = &g.text;
     let mut items = Vec::new();
@@ -628,12 +656,6 @@ fn shop(g: &Game, ui: &mut Ui) {
         heading: purse(g),
         text: t.get("shop.explain"),
         items,
-        ..Panel::default()
-    });
-    ui.panels.push(Panel {
-        id: "nav".into(),
-        kind: "bar".into(),
-        actions: vec![back(g)],
         ..Panel::default()
     });
 }
@@ -1207,76 +1229,234 @@ fn help(g: &Game, ui: &mut Ui) {
     });
 }
 
+/// The co-op screen (T24). Outside a room: the ways in and your name.
+/// In a room: the room on one side (its code, both players, Ready or Start)
+/// and your own loadout on the other, so nobody leaves the room to change
+/// it. After Ape Race's lobby and PokéSurvivor's room that outlives the
+/// screen (journal entry 8).
 fn coop(g: &Game, ui: &mut Ui) {
+    if !g.in_room() {
+        coop_door(g, ui);
+        return;
+    }
     let t = &g.text;
-    let status = g.session.as_ref().map(|n| n.status).unwrap_or("");
-    let connected = matches!(status, online::LOBBY | online::PLAYING);
-    let mut text = String::new();
-    if !g.net_error.is_empty() {
-        text = t.get(&g.net_error);
-    } else if !status.is_empty() {
-        text = t.get(status);
-    }
+    let n = g.session.as_ref().expect("in a room");
+    let connected = matches!(n.status, online::LOBBY | online::PLAYING);
+    let hosting = n.seat == 0;
+    let mut text = if g.net_error.is_empty() {
+        t.get(n.status)
+    } else {
+        t.get(&g.net_error)
+    };
     let mut actions = Vec::new();
-    match &g.session {
-        None => {
-            actions.push(primary(act("page.host", "", t.get("coop.host"))));
-            actions.push(act("page.join", "", t.get("coop.join")));
-            actions.push(act("page.invite", "", t.get("coop.invite")));
-            actions.push(act("page.reply", "", t.get("coop.reply")));
-            text = t.get("coop.explain");
+    if hosting {
+        let ready = g.partner.as_ref().map(|p| p.ready).unwrap_or(false);
+        actions.push(primary(enabled(
+            act("coop.start", "", t.get("coop.start")),
+            connected && ready,
+        )));
+        if connected && g.partner.is_some() {
+            let why = if ready {
+                "coop.partner_ready"
+            } else {
+                "coop.not_ready"
+            };
+            text = format!("{} {}", text, t.get(why));
         }
-        Some(n) => {
-            if n.seat == 0 {
-                let partner = g.peer_load.as_ref().map(|l| t.name(&l.character));
-                actions.push(primary(enabled(
-                    act("coop.start", "", t.get("coop.start")),
-                    connected && partner.is_some(),
-                )));
-                if let Some(p) = partner {
-                    text = format!("{} {}", text, t.fill("coop.partner", &[("name", p)]));
-                }
-            } else if connected {
-                text = format!("{} {}", text, t.get("coop.wait_host"));
-            }
-            actions.push(act("coop.leave", "", t.get("coop.leave")));
-        }
+    } else if connected {
+        let label = if g.ready { "coop.unready" } else { "coop.ready" };
+        actions.push(primary(act("coop.ready", "", t.get(label))));
+        text = format!("{} {}", text, t.get("coop.wait_host"));
     }
+    if !g.room.is_empty() {
+        actions.push(act("page.copy_code", &g.room, t.get("coop.copy_code")));
+        actions.push(act("page.copy_link", &g.room, t.get("coop.copy_link")));
+    }
+    actions.push(act("page.name", &g.save.name, t.get("coop.name_change")));
+    if !g.net_error.is_empty() && !g.last_try.is_empty() {
+        let again = if g.last_try == "host" {
+            act("page.host", "", t.get("coop.retry"))
+        } else {
+            act("page.join_code", &g.last_try, t.get("coop.retry"))
+        };
+        actions.push(again);
+    }
+    if g.net_error == "online.no_relay" {
+        actions.push(act("page.invite", "", t.get("coop.invite")));
+        actions.push(act("page.reply", "", t.get("coop.reply")));
+    }
+    actions.push(act("coop.leave", "", t.get("coop.leave")));
+    let me = seat_item(g, "me", &g.save.name, &g.save.character, hosting, g.ready, "");
+    let them = match &g.partner {
+        Some(p) => seat_item(g, "partner", &p.name, &p.load.character, !hosting, p.ready, &p.at),
+        None => Item {
+            id: "partner".into(),
+            title: t.get("coop.empty_seat"),
+            tone: "empty".into(),
+            ..Item::default()
+        },
+    };
+    let items = if hosting { vec![me, them] } else { vec![them, me] };
     let heading = if g.room.is_empty() {
         t.get("coop.heading")
     } else {
         t.fill("coop.room", &[("code", g.room.clone())])
     };
     ui.panels.push(Panel {
+        id: "room".into(),
+        kind: "room".into(),
+        heading,
+        text,
+        items,
+        actions,
+    });
+    ui.panels.push(Panel {
+        id: "lobby-tabs".into(),
+        kind: "tabs".into(),
+        heading: purse(g),
+        actions: online::PLACES
+            .iter()
+            .map(|p| {
+                let a = act("coop.tab", p, t.get(&format!("coop.tab.{p}")));
+                if g.lobby_tab == *p {
+                    primary(a)
+                } else {
+                    a
+                }
+            })
+            .collect(),
+        ..Panel::default()
+    });
+    match g.lobby_tab.as_str() {
+        "gear" => gear_body(g, ui),
+        "shop" => shop_body(g, ui),
+        _ => ui.panels.push(Panel {
+            id: "characters".into(),
+            kind: "cards".into(),
+            heading: t.get("coop.your_character"),
+            items: g
+                .content
+                .characters
+                .iter()
+                .map(|c| character_item(g, &c.id))
+                .collect(),
+            ..Panel::default()
+        }),
+    }
+}
+
+/// One player in the room: their name (or Host or Partner), their
+/// character, and Ready for the partner. `place` is where they are in the
+/// menus; empty for your own row.
+fn seat_item(g: &Game, id: &str, name: &str, character: &str, host: bool, ready: bool, place: &str) -> Item {
+    let t = &g.text;
+    let role = t.get(if host {
+        "coop.role.host"
+    } else {
+        "coop.role.partner"
+    });
+    let shown = if name.is_empty() {
+        role.clone()
+    } else {
+        name.to_string()
+    };
+    let mine = id == "me";
+    let title = if mine {
+        t.fill("coop.you", &[("name", shown)])
+    } else {
+        shown
+    };
+    let character_name = if g.content.character(character).is_some() {
+        t.name(character)
+    } else {
+        String::new()
+    };
+    let text = if mine {
+        character_name
+    } else {
+        let at = if place.is_empty() { "menus" } else { place };
+        t.fill(
+            "coop.seat",
+            &[
+                ("character", character_name),
+                ("place", t.get(&format!("coop.at.{at}"))),
+            ],
+        )
+    };
+    let tag = if host {
+        if name.is_empty() {
+            String::new()
+        } else {
+            role
+        }
+    } else {
+        t.get(if ready {
+            "coop.is_ready"
+        } else {
+            "coop.is_not_ready"
+        })
+    };
+    Item {
+        id: id.into(),
+        icon: if g.content.character(character).is_some() {
+            format!("players/{character}")
+        } else {
+            String::new()
+        },
+        title,
+        text,
+        tag,
+        tone: if !host && ready {
+            "chosen".into()
+        } else {
+            String::new()
+        },
+        ..Item::default()
+    }
+}
+
+/// The co-op screen outside a room: host, join, and the invitation path
+/// for networks where a room code cannot connect.
+fn coop_door(g: &Game, ui: &mut Ui) {
+    let t = &g.text;
+    let mut text = t.get("coop.explain");
+    let mut actions = vec![
+        primary(act("page.host", "", t.get("coop.host"))),
+        act("page.join", "", t.get("coop.join")),
+    ];
+    if g.coop_more {
+        text = format!("{text}\n{}", t.get("coop.explain_more"));
+        actions.push(act("page.invite", "", t.get("coop.invite")));
+        actions.push(act("page.reply", "", t.get("coop.reply")));
+    } else {
+        actions.push(act("coop.more", "", t.get("coop.more")));
+    }
+    ui.panels.push(Panel {
         id: "coop".into(),
         kind: "menu".into(),
-        heading,
+        heading: t.get("coop.heading"),
         text,
         actions,
         ..Panel::default()
     });
-    let items = g
-        .content
-        .characters
-        .iter()
-        .filter(|c| g.save.unlocked.contains(&c.id))
-        .map(|c| character_item(g, &c.id))
-        .collect();
     ui.panels.push(Panel {
-        id: "characters".into(),
-        kind: "cards".into(),
-        heading: t.get("coop.your_character"),
-        items,
+        id: "name".into(),
+        kind: "menu".into(),
+        heading: t.get("coop.name_heading"),
+        text: if g.save.name.is_empty() {
+            t.get("coop.no_name")
+        } else {
+            g.save.name.clone()
+        },
+        actions: vec![act("page.name", &g.save.name, t.get("coop.name_change"))],
         ..Panel::default()
     });
-    if g.session.is_none() {
-        ui.panels.push(Panel {
-            id: "nav".into(),
-            kind: "bar".into(),
-            actions: vec![back(g)],
-            ..Panel::default()
-        });
-    }
+    ui.panels.push(Panel {
+        id: "nav".into(),
+        kind: "bar".into(),
+        actions: vec![back(g)],
+        ..Panel::default()
+    });
 }
 
 fn card_item(g: &Game, seat: usize, k: usize, card: &crate::world::Card, banish: bool) -> Item {
@@ -1959,6 +2139,91 @@ mod tests {
     use crate::game::tests::game;
     use crate::game::Raw;
 
+    fn room(g: &Game) -> Panel {
+        build(g)
+            .panels
+            .into_iter()
+            .find(|p| p.id == "room")
+            .expect("a room panel")
+    }
+
+    #[test]
+    fn the_lobby_shows_both_players_and_opens_start_once_the_partner_is_ready() {
+        use crate::game::tests::{lobby, wire};
+        let (mut host, mut join) = lobby();
+        let start = |g: &Game| {
+            room(g)
+                .actions
+                .into_iter()
+                .find(|a| a.name == "coop.start")
+                .expect("the host's Start")
+        };
+        assert!(!start(&host).enabled, "the partner is not ready");
+        join.act("coop.name", "Peter").unwrap();
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        assert!(start(&host).enabled);
+        let rows = room(&host).items;
+        assert_eq!((rows[0].id.as_str(), rows[1].title.as_str()), ("me", "Peter"));
+        assert_eq!(rows[1].tag, "Ready");
+        // the joiner sees the host first, a Cancel Ready button and the code
+        let r = room(&join);
+        assert_eq!(r.items[0].id, "partner");
+        assert_eq!(r.items[0].title, "Host", "no name: the role");
+        assert!(r
+            .actions
+            .iter()
+            .any(|a| a.name == "coop.ready" && a.label == "Cancel Ready"));
+        assert!(r
+            .actions
+            .iter()
+            .any(|a| a.name == "page.copy_link" && a.value == "ABCDE"));
+        // the loadout is edited in the room
+        join.act("coop.tab", "gear").unwrap();
+        let ids: Vec<String> = build(&join).panels.into_iter().map(|p| p.id).collect();
+        assert!(
+            ids.contains(&"room".to_string()) && ids.contains(&"inventory".to_string()),
+            "{ids:?}"
+        );
+        // the title leads back to the room
+        join.act("screen.show", "title").unwrap();
+        let menu = build(&join).panels.into_iter().find(|p| p.id == "menu").unwrap();
+        assert!(menu.actions.iter().any(|a| a.label == "Back to your co-op room"));
+        // leaving shows the way in again
+        host.act("coop.leave", "").unwrap();
+        let ids: Vec<String> = build(&host).panels.into_iter().map(|p| p.id).collect();
+        assert!(ids.contains(&"coop".to_string()) && !ids.contains(&"room".to_string()));
+    }
+
+    #[test]
+    fn a_room_made_by_invitation_offers_no_code_to_copy_or_retry() {
+        let mut g = crate::game::tests::game();
+        g.act("screen.show", "coop").unwrap();
+        g.host(7, "gs");
+        g.act("coop.by_invitation", "").unwrap();
+        g.set_net_error("online.signal_failed");
+        let r = room(&g);
+        assert_eq!(r.heading, "Play together");
+        let names: Vec<String> = r.actions.into_iter().map(|a| a.name).collect();
+        for gone in ["page.copy_code", "page.copy_link", "page.host"] {
+            assert!(!names.contains(&gone.to_string()), "{names:?}");
+        }
+    }
+
+    #[test]
+    fn a_failed_connection_offers_try_again_and_the_invitation() {
+        let mut g = crate::game::tests::game();
+        g.act("screen.show", "coop").unwrap();
+        g.join("abcde", "gs").unwrap();
+        g.set_net_error("online.no_relay");
+        let names: Vec<(String, String)> = room(&g).actions.into_iter().map(|a| (a.name, a.value)).collect();
+        assert!(
+            names.contains(&("page.join_code".into(), "ABCDE".into())),
+            "{names:?}"
+        );
+        assert!(names.iter().any(|(n, _)| n == "page.invite"));
+    }
+
     #[test]
     fn the_build_says_when_an_ability_is_ready_to_evolve() {
         let mut g = game();
@@ -2204,6 +2469,33 @@ mod tests {
             "coop.invite_prompt",
             "coop.reply_prompt",
             "coop.copied",
+            "coop.copy_failed",
+            "coop.copy_invitation",
+            "coop.copy_reply",
+            "coop.connect",
+            "coop.reply_ready",
+            "coop.name_prompt",
+            "coop.ready_later",
+            "coop.in_room",
+            "coop.not_ready",
+            "coop.partner_ready",
+            "coop.unready",
+            "coop.is_ready",
+            "coop.is_not_ready",
+            "coop.retry",
+            "coop.empty_seat",
+            "coop.you",
+            "coop.seat",
+            "coop.role.host",
+            "coop.role.partner",
+            "coop.tab.character",
+            "coop.tab.gear",
+            "coop.tab.shop",
+            "coop.at.character",
+            "coop.at.gear",
+            "coop.at.shop",
+            "coop.at.menus",
+            "menu.coop_room",
             "page.no_file",
             "page.loading",
             "screen.run.title",

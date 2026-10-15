@@ -118,7 +118,20 @@ pub struct Game {
     pub session: Option<Session>,
     pub room: String,
     pub hosting: bool,
-    pub peer_load: Option<Loadout>,
+    /// The partner's seat in the lobby, as they last sent it (T24).
+    pub partner: Option<online::Seat>,
+    /// The seat last sent to the partner, so a change is sent once (T23).
+    sent: Option<online::Seat>,
+    /// The joiner has pressed Ready; their own loadout change takes it back.
+    pub ready: bool,
+    /// The lobby's open tab: one of `online::PLACES`.
+    pub lobby_tab: String,
+    /// The invitation buttons are showing on the co-op screen.
+    pub coop_more: bool,
+    /// What Try again repeats: "host", a room code, or nothing.
+    pub last_try: String,
+    /// Leave was pressed: the session goes once its goodbye is sent.
+    leaving: bool,
     pub net_error: String,
     pub build: String,
     pub view_w: i32,
@@ -175,7 +188,13 @@ impl Game {
             session: None,
             room: String::new(),
             hosting: false,
-            peer_load: None,
+            partner: None,
+            sent: None,
+            ready: false,
+            lobby_tab: online::PLACES[0].into(),
+            coop_more: false,
+            last_try: String::new(),
+            leaving: false,
             net_error: String::new(),
             build: build.to_string(),
             view_w: 1280,
@@ -466,7 +485,13 @@ impl Game {
             // the last inputs go reliably, so the partner can confirm the end
             link.send_inputs_reliably();
             link.running = false;
+            if link.status == online::PLAYING {
+                // back in the lobby: seats are sent again (T24)
+                link.status = online::LOBBY;
+            }
         }
+        self.sent = None;
+        self.share();
     }
 
     // ---- starting runs -------------------------------------------------------
@@ -510,8 +535,8 @@ impl Game {
         let code = online::make_code(n);
         self.session = Some(Session::new(0, &self.build));
         self.hosting = true;
-        self.peer_load = None;
-        self.net_error.clear();
+        self.fresh_room();
+        self.last_try = "host".into();
         self.room = code.clone();
         online::room_name(app_id, &code)
     }
@@ -526,10 +551,24 @@ impl Game {
         };
         self.session = Some(Session::new(1, &self.build));
         self.hosting = false;
-        self.peer_load = None;
-        self.net_error.clear();
+        self.fresh_room();
+        self.last_try = cleaned.clone();
         self.room = cleaned.clone();
         Some(online::room_name(app_id, &cleaned))
+    }
+
+    fn fresh_room(&mut self) {
+        self.partner = None;
+        self.sent = None;
+        self.ready = false;
+        self.leaving = false;
+        self.net_error.clear();
+        self.lobby_tab = online::PLACES[0].into();
+    }
+
+    /// In a co-op room and not on the way out of it.
+    pub fn in_room(&self) -> bool {
+        self.session.is_some() && !self.leaving
     }
 
     pub fn net_peer(&mut self, peer: u32) {
@@ -542,7 +581,7 @@ impl Game {
         if let Some(n) = self.session.as_mut() {
             n.left(peer);
         }
-        self.peer_load = None;
+        self.partner = None;
         self.after_tick();
     }
 
@@ -554,19 +593,15 @@ impl Game {
             .unwrap_or(false);
         let Some(n) = self.session.as_mut() else { return };
         n.message(peer, text, self.now_us);
-        let now_lobby = n.status == online::LOBBY;
-        if now_lobby && !was_lobby && n.seat == 1 {
-            let load = self.my_load();
-            if let Some(n) = self.session.as_mut() {
-                n.send_load(&load);
-            }
+        if n.status == online::LOBBY && !was_lobby {
+            self.sent = None;
+            self.share();
         }
         let events = self.session.as_mut().map(|n| n.take_events()).unwrap_or_default();
         for e in events {
             match e {
-                Event::PeerLoad(load) => self.peer_load = Some(load),
+                Event::PeerSeat(seat) => self.partner = Some(seat),
                 Event::Start { seed, loads } => {
-                    self.peer_load = loads.first().cloned();
                     self.world = Some(World::new(&self.content, seed, &loads));
                     self.seat = 1;
                     self.begin_run();
@@ -576,7 +611,13 @@ impl Game {
     }
 
     pub fn net_outbox(&mut self) -> Vec<(u32, String, bool)> {
-        self.session.as_mut().map(|n| n.take_outbox()).unwrap_or_default()
+        let out = self.session.as_mut().map(|n| n.take_outbox()).unwrap_or_default();
+        if self.leaving {
+            // the goodbye is on its way: the room is gone
+            self.session = None;
+            self.leaving = false;
+        }
+        out
     }
 
     pub fn set_net_error(&mut self, key: &str) {
@@ -586,17 +627,24 @@ impl Game {
     pub fn leave_coop(&mut self) {
         if let Some(n) = self.session.as_mut() {
             n.leave();
+            self.leaving = true;
         }
         self.hosting = false;
-        self.peer_load = None;
+        self.partner = None;
+        self.sent = None;
+        self.ready = false;
         self.room.clear();
     }
 
     fn start_coop(&mut self) -> Result<(), String> {
-        let peer = self
-            .peer_load
+        let partner = self
+            .partner
             .clone()
             .ok_or_else(|| self.text.get("coop.no_partner"))?;
+        if !partner.ready {
+            return Err(self.text.get("coop.not_ready"));
+        }
+        let peer = partner.load;
         let mine = self.my_load();
         let seed = self.rng.next_u64();
         let loads = vec![mine, peer];
@@ -615,8 +663,60 @@ impl Game {
         self.text.get(key)
     }
 
+    /// Where this player is, as the partner's lobby shows it.
+    fn place(&self) -> String {
+        match self.screen {
+            Screen::Coop => self.lobby_tab.clone(),
+            Screen::Hangar => "character".into(),
+            Screen::Gear => "gear".into(),
+            Screen::Shop => "shop".into(),
+            _ => String::new(),
+        }
+    }
+
+    /// Each player sends their seat whenever it differs from the one the
+    /// partner last heard: a character, gear or Outfitter change on any
+    /// screen reaches the run (T23), and so do the name, Ready and where
+    /// they are (T24). The joiner's own loadout change takes back Ready.
+    fn share(&mut self) {
+        let Some((seat_no, lobby)) = self
+            .session
+            .as_ref()
+            .map(|n| (n.seat, n.status == online::LOBBY && !n.running))
+        else {
+            return;
+        };
+        if !lobby || self.leaving {
+            return;
+        }
+        let load = self.my_load();
+        let changed = self.sent.as_ref().map(|s| s.load != load).unwrap_or(false);
+        if seat_no == 1 && changed {
+            self.ready = false;
+        }
+        let seat = online::Seat {
+            load,
+            name: self.save.name.clone(),
+            ready: seat_no == 1 && self.ready,
+            at: self.place(),
+        };
+        if self.sent.as_ref() == Some(&seat) {
+            return;
+        }
+        if let Some(n) = self.session.as_mut() {
+            n.send_seat(&seat);
+        }
+        self.sent = Some(seat);
+    }
+
     pub fn act(&mut self, name: &str, value: &str) -> Result<(), String> {
         self.notice.clear();
+        let done = self.act_on(name, value);
+        self.share();
+        done
+    }
+
+    fn act_on(&mut self, name: &str, value: &str) -> Result<(), String> {
         match name {
             "screen.show" => {
                 let s = Screen::from(value).ok_or_else(|| format!("There is no screen \"{value}\"."))?;
@@ -637,17 +737,6 @@ impl Game {
                     return Err(self.refusal("hangar.locked"));
                 }
                 self.save.character = value.to_string();
-                if self
-                    .session
-                    .as_ref()
-                    .map(|n| n.seat == 1 && n.status == online::LOBBY)
-                    .unwrap_or(false)
-                {
-                    let load = self.my_load();
-                    if let Some(n) = self.session.as_mut() {
-                        n.send_load(&load);
-                    }
-                }
             }
             "hangar.buy" => self
                 .save
@@ -707,7 +796,12 @@ impl Game {
                     self.toggle_overlay();
                 }
             }
-            "run.start" => self.start_solo()?,
+            "run.start" => {
+                if self.in_room() {
+                    return Err(self.refusal("coop.in_room"));
+                }
+                self.start_solo()?
+            }
             "run.pause" => {
                 if !self.coop_running() {
                     self.paused = true;
@@ -767,6 +861,29 @@ impl Game {
             }
             "coop.start" => self.start_coop()?,
             "coop.leave" => self.leave_coop(),
+            "coop.ready" => {
+                let lobby = self
+                    .session
+                    .as_ref()
+                    .map(|n| n.seat == 1 && n.status == online::LOBBY)
+                    .unwrap_or(false);
+                if !lobby {
+                    return Err(self.refusal("coop.ready_later"));
+                }
+                self.ready = !self.ready;
+            }
+            "coop.name" => self.save.name = online::clean_name(value),
+            "coop.tab" => {
+                if !online::PLACES.contains(&value) {
+                    return Err(format!("There is no lobby tab \"{value}\"."));
+                }
+                self.lobby_tab = value.to_string();
+            }
+            "coop.more" => self.coop_more = true,
+            "coop.by_invitation" => {
+                self.room.clear();
+                self.last_try.clear();
+            }
             other => return Err(format!("Unknown action \"{other}\".")),
         }
         Ok(())
@@ -815,7 +932,7 @@ pub mod tests {
     }
 
     /// Passes everything each game left in its outbox to the other.
-    fn wire(a: &mut Game, b: &mut Game) {
+    pub fn wire(a: &mut Game, b: &mut Game) {
         for (_, text, _) in a.net_outbox() {
             b.net_message(1, &text);
         }
@@ -834,7 +951,9 @@ pub mod tests {
         join.net_peer(1);
         wire(&mut host, &mut join);
         wire(&mut host, &mut join);
-        assert!(host.peer_load.is_some(), "the host heard the joiner's loadout");
+        assert!(host.partner.is_some(), "the host heard the joiner's loadout");
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
         host.act("coop.start", "").unwrap();
         wire(&mut host, &mut join);
         assert_eq!(join.screen, Screen::Run);
@@ -887,6 +1006,152 @@ pub mod tests {
         }
     }
 
+    /// A host and a joiner, connected and in the lobby on the co-op screen.
+    pub fn lobby() -> (Game, Game) {
+        let mut host = game();
+        let mut join = game();
+        host.act("screen.show", "coop").unwrap();
+        join.act("screen.show", "coop").unwrap();
+        host.host(7, "gs");
+        join.join("ABCDE", "gs").unwrap();
+        host.net_peer(2);
+        join.net_peer(1);
+        wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        (host, join)
+    }
+
+    #[test]
+    fn gear_and_outfitter_changes_in_the_lobby_reach_the_host() {
+        let (mut host, mut join) = lobby();
+        let before = host.partner.clone().expect("the joiner's first seat").load.stats;
+        // plating_rank: max_hp +10 a rank, 120 gold for the first
+        join.save.gold = 120;
+        join.act("shop.buy", "plating_rank").unwrap();
+        // kinetic_core: damage_pct +3 at rank one, worn in the core slot
+        join.save.modules.push(crate::meta::Piece {
+            uid: 99,
+            id: "kinetic_core".into(),
+            rank: 1,
+        });
+        join.act("screen.show", "gear").unwrap();
+        join.act("gear.equip", "99").unwrap();
+        wire(&mut host, &mut join);
+        let after = host.partner.clone().unwrap().load.stats;
+        assert_eq!(after.max_hp, before.max_hp + 10, "the Outfitter rank arrived");
+        assert_eq!(after.damage_pct, before.damage_pct + 3, "the worn module arrived");
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        let w = join.world.as_ref().unwrap();
+        assert_eq!(
+            w.players[1].load.stats.damage_pct,
+            before.damage_pct + 3,
+            "and the run has it"
+        );
+    }
+
+    #[test]
+    fn an_unchanged_loadout_is_not_sent_again() {
+        let (_host, mut join) = lobby();
+        join.act("coop.tab", "gear").unwrap();
+        assert!(!join.net_outbox().is_empty(), "a new place is sent");
+        join.act("coop.tab", "gear").unwrap();
+        join.act("gear.pick", "0").unwrap_err();
+        assert!(join.net_outbox().is_empty(), "nothing changed, nothing sent");
+    }
+
+    #[test]
+    fn the_host_starts_only_once_the_partner_is_ready_and_their_own_change_takes_it_back() {
+        let (mut host, mut join) = lobby();
+        assert!(host.act("coop.start", "").is_err(), "not ready yet");
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        assert!(host.partner.as_ref().unwrap().ready);
+        // the partner buys an Outfitter rank: Ready is taken back
+        join.save.gold = 120;
+        join.act("shop.buy", "plating_rank").unwrap();
+        wire(&mut host, &mut join);
+        assert!(!join.ready && !host.partner.as_ref().unwrap().ready);
+        assert!(host.act("coop.start", "").is_err());
+        // the host's own change leaves the partner ready
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        host.act("hangar.pick", "pathfinder").unwrap();
+        host.save.gold = 120;
+        host.act("shop.buy", "plating_rank").unwrap();
+        wire(&mut host, &mut join);
+        assert!(join.ready && host.partner.as_ref().unwrap().ready);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        assert_eq!(join.screen, Screen::Run);
+    }
+
+    #[test]
+    fn each_player_sees_the_other_s_name_character_and_place() {
+        let (mut host, mut join) = lobby();
+        host.act("coop.name", "  Sam   G ").unwrap();
+        host.act("hangar.pick", "pathfinder").unwrap();
+        join.act("coop.name", "Peter").unwrap();
+        join.act("coop.tab", "gear").unwrap();
+        wire(&mut host, &mut join);
+        let seen_by_join = join.partner.clone().expect("the host's seat");
+        assert_eq!(seen_by_join.name, "Sam G");
+        assert_eq!(seen_by_join.load.character, "pathfinder");
+        assert_eq!(
+            seen_by_join.at, "character",
+            "the host's lobby opens on Character"
+        );
+        let seen_by_host = host.partner.clone().unwrap();
+        assert_eq!(
+            (seen_by_host.name.as_str(), seen_by_host.at.as_str()),
+            ("Peter", "gear")
+        );
+        assert!(join.act("coop.tab", "cellar").is_err());
+    }
+
+    #[test]
+    fn leaving_sends_a_goodbye_then_closes_the_room() {
+        let (mut host, mut join) = lobby();
+        host.act("coop.leave", "").unwrap();
+        assert!(!host.in_room(), "the screen shows the way in again at once");
+        let out = host.net_outbox();
+        assert!(out.iter().any(|(_, t, _)| t.contains("bye")), "{out:?}");
+        assert!(host.session.is_none(), "the room is gone once the goodbye is out");
+        for (_, text, _) in out {
+            join.net_message(1, &text);
+        }
+        assert_eq!(join.session.as_ref().unwrap().status, online::LEFT_ROOM);
+        assert!(host.act("run.start", "").is_ok(), "solo play is open again");
+    }
+
+    #[test]
+    fn solo_play_waits_until_you_leave_the_room() {
+        let (mut host, _join) = lobby();
+        assert!(host.act("run.start", "").is_err());
+    }
+
+    #[test]
+    fn after_a_co_op_run_both_are_back_in_the_lobby_and_changes_are_sent() {
+        let (mut host, mut join) = lobby();
+        join.act("coop.ready", "").unwrap();
+        wire(&mut host, &mut join);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        host.end_run();
+        join.end_run();
+        wire(&mut host, &mut join);
+        for g in [&host, &join] {
+            assert_eq!(g.session.as_ref().unwrap().status, online::LOBBY);
+        }
+        join.save.gold = 120;
+        let before = host.partner.clone().unwrap().load.stats.max_hp;
+        join.act("shop.buy", "plating_rank").unwrap();
+        wire(&mut host, &mut join);
+        assert_eq!(host.partner.clone().unwrap().load.stats.max_hp, before + 10);
+    }
+
     /// Two co-op games whose messages take `lag` frames, losing every
     /// `lose`-th fast message, for `frames` frames.
     fn lagged_coop(lag: usize, lose: usize, frames: i64, host_bits: fn(i64) -> u32) -> (Game, Game) {
@@ -897,6 +1162,8 @@ pub mod tests {
         host.net_peer(2);
         join.net_peer(1);
         wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        join.act("coop.ready", "").unwrap();
         wire(&mut host, &mut join);
         host.act("coop.start", "").unwrap();
         wire(&mut host, &mut join);
@@ -1041,6 +1308,8 @@ pub mod tests {
         host.net_peer(2);
         join.net_peer(1);
         wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        join.act("coop.ready", "").unwrap();
         wire(&mut host, &mut join);
         host.act("coop.start", "").unwrap();
         wire(&mut host, &mut join);

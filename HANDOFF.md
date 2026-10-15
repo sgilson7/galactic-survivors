@@ -50,10 +50,22 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 - **Orbits and tethers leave ground fields** (R4.5): an orbiting body where it hits, then not again for one full turn (`fields.orbit_turns`); a tether where it cuts, at most every two seconds (`fields.tether_ms`).
 - **The rig logbook** (R4.8–R4.10): `cargo test -p tool_core --test rig_space -- --ignored --nocapture logbook` plays only rigs whose line is missing or stale. The full log is `rig-log/` (local, 1.5 GB); `tests/rig-log/` is the summary in git. Its first run found a panic (R4.10), now fixed and replayed every day from `FOUND`.
 
+## What changed in the co-op lobby (15 October 2026, TRIAGE T23–T24)
+
+- **A gear bug, fixed first** (T23, R4.12): a partner's gear or Outfitter change made after connecting never reached the run. Each player now sends their seat whenever it changes.
+- **The new lobby** (T24, R4.13), after Ape Race and PokéSurvivor (journal entry 8). The room is on the left: its code with Copy code and Copy link, both players with name, character and Ready, where the partner is, Start or Ready, Try again after a failed connection, and Leave. Your Character, Gear and Outfitter are tabs on the right. The partner's own loadout change takes back Ready; the host's does not. Players type a name, kept in the save. A room link (`#room=CODE`) joins on opening. The invitation buttons sit behind "Can't connect with a code?". Solo play waits until you leave the room, and the title's co-op button reads "Back to your co-op room".
+- **Two older bugs found on the way:** Leave never closed the room (R4.14), and after a co-op run the session stayed "playing", so changes after Results went unsent (R4.15).
+- `PROTOCOL` is 3: a tab opened before this change is told to reload.
+
 ## What passed
 
 | Check | Result |
 | --- | --- |
+| `./scripts/check.sh`, after the co-op lobby | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
+| `./scripts/count-tests.sh`, after the co-op lobby | 194 passed, 0 failed, 3 ignored (the probe, the rig sweep and the logbook) |
+| `python3 tests/browser/online.py chromium firefox webkit`, after the co-op lobby | ONLINE CHECK PASSED (now presses Ready) |
+| `tests/browser/lobby.py` (new), Chromium | 12 checks passed: Ready gates Start, the partner's row, names, the phone layout, Copy code and Copy link, a room link |
+| `python3 scripts/break_tests.py T23 T24 "tethers replace"`, after the co-op lobby | 15 of 15 caught; two older rows had rotted (R4.17) and were re-aimed |
 | `./scripts/check.sh`, after round 4 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026, in 1 min 44 s |
 | `./scripts/count-tests.sh`, after round 4 | 178 passed, 0 failed, 2 ignored (the probe and the rig sweep) |
 | `python3 scripts/break_tests.py`, after round 4 | 87 of 87 planted defects caught |
@@ -81,6 +93,11 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 
 ## Try these by hand first
 
+After the co-op lobby:
+1. Host a room on one computer and send the link to your partner on another. Their page should open in your room. Then try typing the code instead (R4.18).
+2. As the partner, press Ready, then equip a module: Ready should go back off, and the host's Start should wait.
+3. Both type a name. Play a run, go back to the lobby from Results, change gear, and play again: the change should be in the second run.
+
 After round 3:
 1. Play co-op between two homes. Watch the numbers at the top right (ping, corrections, waited) and send them (R3.9).
 2. Press E in a run and move a part: pick it, then click a socket. Try Ring, Ignite and the Orbital Lance in one rig.
@@ -103,6 +120,7 @@ From the first build:
 
 ## Rows for the person
 
+- R4.18: the lobby between two computers, by room code and by link.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
 - R3.18: the names and texts of the new content were written by the agent.

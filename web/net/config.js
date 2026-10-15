@@ -16,7 +16,7 @@ export const CONFIG = {
   appId: "galactic-survivors-p2p",
 
   // The core's PROTOCOL. The room name is appId, this tag and the code.
-  protocol: 2,
+  protocol: 3,
 
   // The vendored Trystero bundle, pinned in vendor/SHA256SUMS and checked by
   // scripts/build.sh. Imported only when a player uses a room code.

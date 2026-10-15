@@ -28,6 +28,10 @@ One choice offered at a level-up or after a rift: a new ability, a higher level 
 
 Two players in one run, each in their own browser, connected directly to each other. Both players share experience and level up together.
 
+### Lobby
+
+The co-op screen before and between runs. It shows the room code, both players with their names and characters, and your own character, gear and Outfitter. The partner presses Ready; changing their own loadout afterwards takes Ready back. The host starts the run once the partner is ready.
+
 ### Rig
 
 A row of sockets that fires on its own, read left to right each time. A player has one rig for each ability slot. The first ability in a rig sets its recharge, and each part adds to it.

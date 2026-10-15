@@ -59,6 +59,9 @@ pub struct Save {
     /// Rare parts pulled from the salvage cache (T15).
     #[serde(default)]
     pub parts: Vec<String>,
+    /// The name a co-op partner sees (T24); empty until the player types one.
+    #[serde(default)]
+    pub name: String,
 }
 
 /// What a finished run paid, for the results screen.
@@ -111,6 +114,7 @@ impl Save {
             settings: Settings::default(),
             character: content.characters[0].id.clone(),
             parts: Vec::new(),
+            name: String::new(),
         }
     }
 

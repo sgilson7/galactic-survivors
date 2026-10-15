@@ -49,6 +49,8 @@ export function makeOnline(game, build) {
     // Host by pasted codes: resolves to the invitation to send.
     invite() {
       game.host(word(), word(), CONFIG.appId);
+      // an invitation has no room code to share or retry
+      game.act("coop.by_invitation", "");
       return open(true, "code", "").invitation();
     },
     accept: (reply) => (link ? link.accept(reply) : Promise.reject(new Error("not hosting"))),
