@@ -66,6 +66,9 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 
 | Check | Result |
 | --- | --- |
+| `scripts/publish.sh` from bc9198b (browser saving, T25), then the live check | BUILDER CHECK PASSED; live PASSED in all three engines, including "the save survives a reload", 15 Oct 2026 |
+| `./scripts/count-tests.sh`, after browser saving | 201 passed, 0 failed, 3 ignored |
+| `python3 scripts/break_tests.py T25`, plus the two co-op progress rows | 8 of 8 caught |
 | `scripts/publish.sh` from df0c3e6 (the lobby, T23–T24), then the live check | BUILDER CHECK PASSED; Pages built; live PASSED in all three engines, 15 Oct 2026 |
 | `./scripts/check.sh`, after the co-op lobby | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `./scripts/count-tests.sh`, after the co-op lobby | 194 passed, 0 failed, 3 ignored (the probe, the rig sweep and the logbook) |

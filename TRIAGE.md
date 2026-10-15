@@ -45,4 +45,4 @@ Answers from the person to the journal's sixth tab, 15 October 2026:
 | T22 | "yes do the shuffled order for 5 and 6 token rigs. do 1 hour of both" | Five and six tokens are logged in a fixed shuffled order; an hour of each was run (R4.11). | 7176b3e | done |
 | T23 | "4. yes" (fix the co-op gear bug first, on its own) | Gear and Outfitter changes made in the lobby now reach the run (R4.12). | 34306c8 | done |
 | T24 | "1. yes 2. yes, they can write their own names in 3. yes" (journal entry 8: a partner's own change takes back Ready; players type their names; a room link joins on opening) | The new co-op lobby (R4.13–R4.16). | 99ea55c | done |
-| T25 | "yeah save automatically to the browser and then deploy, remembering to press save feels like its just going to result in annoyance" | The browser keeps the save by itself; download stays as a backup (R4.22). | pending | done |
+| T25 | "yeah save automatically to the browser and then deploy, remembering to press save feels like its just going to result in annoyance" | The browser keeps the save by itself; download stays as a backup (R4.22). | bc9198b | done |
