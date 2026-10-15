@@ -71,6 +71,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 
 | Check | Result |
 | --- | --- |
+| `scripts/publish.sh` from e1fa73f (rune chips, T26), then the live check | BUILDER CHECK PASSED; live PASSED in all three engines; a square walked on the live site showed its chip, 15 Oct 2026 |
 | `./scripts/check.sh`, after rune chips (T26) | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `./scripts/count-tests.sh`, after rune chips | 202 passed, 0 failed, 3 ignored |
 | `python3 scripts/break_tests.py "(T26)"` | 4 of 4 caught |
