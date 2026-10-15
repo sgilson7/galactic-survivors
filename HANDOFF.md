@@ -64,6 +64,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `./scripts/check.sh`, after the co-op lobby | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026 |
 | `./scripts/count-tests.sh`, after the co-op lobby | 194 passed, 0 failed, 3 ignored (the probe, the rig sweep and the logbook) |
 | `python3 tests/browser/online.py chromium firefox webkit`, after the co-op lobby | ONLINE CHECK PASSED (now presses Ready) |
+| Rig logbook from ef7a6bb: an hour each of shuffled five- and six-token rigs, then a refresh of one to four | 21,526,125 five (4.41%), 14,631,621 six (0.05%), 8,772,732 four refreshed with no behaviour changed; 18 failed: 17 a crowded Boomerang Disc, now noted (R4.19), and 1 over the effects ceiling, a question for the person (R4.20) |
 | `tests/browser/lobby.py` (new), Chromium | 12 checks passed: Ready gates Start, the partner's row, names, the phone layout, Copy code and Copy link, a room link |
 | `python3 scripts/break_tests.py T23 T24 "tethers replace"`, after the co-op lobby | 15 of 15 caught; two older rows had rotted (R4.17) and were re-aimed |
 | `./scripts/check.sh`, after round 4 | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 15 Oct 2026, in 1 min 44 s |
@@ -121,6 +122,7 @@ From the first build:
 ## Rows for the person
 
 - R4.18: the lobby between two computers, by room code and by link.
+- R4.20: how to bound the effects a rig like Ring, Swarm Battery, On Hit, Twin, Sweep Cannon can pile up.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
 - R3.18: the names and texts of the new content were written by the agent.

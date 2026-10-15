@@ -42,6 +42,6 @@ Answers from the person to the journal's sixth tab, 15 October 2026:
 | T19 | "yes" (formations on Tether: one tether for each copy) | Each copy joins the next end, or reaches out its own way (R4.4). | 0242533 | done |
 | T20 | "after x full rotations of an orb, it can leave a field again, i leave x up to you based on gameplay feel" | One turn (`orbit_turns`); a tether, every two seconds (R4.5). | 0242533 | done |
 | T21 | "yes build the logbook, keep it locally, publish a scoped down one to the repo" | `rig-log/` stays local; `tests/rig-log/` holds the summary (R4.8). | 0242533 | done |
-| T22 | "yes do the shuffled order for 5 and 6 token rigs. do 1 hour of both" | Five and six tokens are logged in a fixed shuffled order; an hour of each was run (R4.11). | pending | done |
+| T22 | "yes do the shuffled order for 5 and 6 token rigs. do 1 hour of both" | Five and six tokens are logged in a fixed shuffled order; an hour of each was run (R4.11). | 7176b3e | done |
 | T23 | "4. yes" (fix the co-op gear bug first, on its own) | Gear and Outfitter changes made in the lobby now reach the run (R4.12). | 34306c8 | done |
 | T24 | "1. yes 2. yes, they can write their own names in 3. yes" (journal entry 8: a partner's own change takes back Ready; players type their names; a room link joins on opening) | The new co-op lobby (R4.13–R4.16). | 99ea55c | done |
