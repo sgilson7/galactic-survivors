@@ -71,16 +71,18 @@
   },
   "purse": "Gold {gold} · Tickets {tickets}",
   "save": {
-    "heading": "Your save file",
-    "explain": "Progress lives in a file you keep. Download it after a run and load it next time you play.",
+    "heading": "Your save",
+    "explain": "Your progress saves in this browser by itself, after every run and every purchase. Download a copy to keep a backup or to play on another computer.",
     "download": "Download save",
     "load": "Load save",
-    "done": "Save downloaded. Load this file next time to pick up where you left off.",
+    "done": "Save downloaded. Load it to play on another computer, or to go back to this point.",
     "loaded": "Save loaded.",
     "not_json": "That file is not a save file: it could not be read as JSON.",
     "wrong_game": "That file is a save from another game. Choose a Galactic Survivors save.",
     "wrong_version": "That save comes from a different version of the game and cannot be loaded here.",
-    "damaged": "That save is missing parts the game needs. Choose another file."
+    "damaged": "That save is missing parts the game needs. Choose another file.",
+    "no_browser": "This browser is not keeping your save; private windows often don't. Download it after a run and load it next time you play.",
+    "stored_unreadable": "The save in this browser could not be read, so you are on a new save. The old one is set aside, and a downloaded save can still be loaded."
   },
   "key": {
     "enter": "Enter",

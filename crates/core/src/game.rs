@@ -169,6 +169,11 @@ pub struct Game {
     pub reveal_all: bool,
     pub notice: String,
     pub saved_since_run: bool,
+    /// The save as this browser last stored it (T25); None before the
+    /// first store.
+    stored: Option<Save>,
+    /// Whether this browser keeps the save: unknown until the page tries.
+    pub store_ok: Option<bool>,
     pub frame: u32,
 }
 
@@ -220,6 +225,8 @@ impl Game {
             reveal_all: false,
             notice: String::new(),
             saved_since_run: true,
+            stored: None,
+            store_ok: None,
             frame: 0,
         })
     }
@@ -901,6 +908,46 @@ impl Game {
         self.save.to_json()
     }
 
+    /// The save to store in this browser, when it differs from the one last
+    /// stored (T25). Nothing mid-run: a run pays into the save at its end.
+    pub fn take_autosave(&mut self) -> Option<String> {
+        if self.screen == Screen::Run || self.stored.as_ref() == Some(&self.save) {
+            return None;
+        }
+        self.stored = Some(self.save.clone());
+        Some(self.save.to_json())
+    }
+
+    /// The save this browser kept, read when the page opens. An empty text
+    /// is a first visit. A save that cannot be read leaves a new save in
+    /// place and is returned so the page can set it aside rather than
+    /// write over it; otherwise this returns nothing.
+    pub fn restore(&mut self, text: &str) -> String {
+        if text.is_empty() {
+            return String::new();
+        }
+        match Save::from_json(&self.content, text) {
+            Ok(save) => {
+                self.stored = Some(save.clone());
+                self.save = save;
+                String::new()
+            }
+            Err(_) => {
+                self.notice = "save.stored_unreadable".into();
+                text.to_string()
+            }
+        }
+    }
+
+    /// The page reports whether storing the save worked.
+    pub fn storage_ok(&mut self, ok: bool) {
+        self.store_ok = Some(ok);
+        if !ok {
+            // try again on the next change
+            self.stored = None;
+        }
+    }
+
     pub fn load_save(&mut self, text: &str) -> Result<(), String> {
         let save = Save::from_json(&self.content, text).map_err(|k| self.text.get(k))?;
         self.save = save;
@@ -1124,6 +1171,59 @@ pub mod tests {
         }
         assert_eq!(join.session.as_ref().unwrap().status, online::LEFT_ROOM);
         assert!(host.act("run.start", "").is_ok(), "solo play is open again");
+    }
+
+    #[test]
+    fn the_save_is_stored_once_after_each_change_and_never_mid_run() {
+        let mut g = game();
+        let first = g.take_autosave().expect("a first visit stores the new save");
+        assert!(g.take_autosave().is_none(), "nothing changed");
+        g.save.gold = 120;
+        g.act("shop.buy", "plating_rank").unwrap();
+        let bought = g.take_autosave().expect("a purchase is stored");
+        assert_ne!(first, bought);
+        assert!(bought.contains("\"plating_rank\": 1") || bought.contains("\"plating_rank\":1"));
+        g.act("screen.show", "hangar").unwrap();
+        g.act("run.start", "").unwrap();
+        g.save.gold += 1;
+        assert!(g.take_autosave().is_none(), "nothing is stored mid-run");
+        g.act("run.quit", "").unwrap();
+        let after = g.take_autosave().expect("the run's end is stored");
+        assert!(
+            after.contains("\"runs\": 1") || after.contains("\"runs\":1"),
+            "the run counted"
+        );
+    }
+
+    #[test]
+    fn a_stored_save_comes_back_and_a_refused_store_is_tried_again() {
+        let mut a = game();
+        a.save.gold = 777;
+        a.save.name = "Ana".into();
+        let text = a.take_autosave().unwrap();
+        let mut b = game();
+        assert_eq!(b.restore(&text), "", "a good save needs no setting aside");
+        assert_eq!((b.save.gold, b.save.name.as_str()), (777, "Ana"));
+        assert!(
+            b.take_autosave().is_none(),
+            "what was just read is already stored"
+        );
+        assert_eq!(b.restore(""), "", "a first visit");
+        // the browser refused the write: the next frame tries again
+        b.save.gold = 1;
+        assert!(b.take_autosave().is_some());
+        b.storage_ok(false);
+        assert!(b.take_autosave().is_some(), "tried again");
+    }
+
+    #[test]
+    fn an_unreadable_stored_save_is_set_aside_for_a_new_one() {
+        let mut g = game();
+        let fresh = g.save.clone();
+        let aside = g.restore("{ not a save");
+        assert_eq!(aside, "{ not a save", "handed back to be kept, not written over");
+        assert_eq!(g.save, fresh, "play goes on with a new save");
+        assert_eq!(g.notice, "save.stored_unreadable");
     }
 
     /// Every way out of co-op keeps what the run paid (the save lives in

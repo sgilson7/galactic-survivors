@@ -61,6 +61,18 @@ impl Galaxy {
         self.inner.save_name()
     }
 
+    pub fn take_autosave(&mut self) -> String {
+        self.inner.take_autosave()
+    }
+
+    pub fn restore(&mut self, text: &str) -> String {
+        self.inner.restore(text)
+    }
+
+    pub fn storage_ok(&mut self, ok: bool) {
+        self.inner.storage_ok(ok)
+    }
+
     pub fn host(&mut self, n_hi: u32, n_lo: u32, app_id: &str) -> String {
         self.inner.host(n_hi, n_lo, app_id)
     }

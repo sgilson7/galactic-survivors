@@ -194,12 +194,22 @@ fn title(g: &Game, ui: &mut Ui) {
     ui.panels.push(save_panel(g));
 }
 
+/// What the save panel says: the browser keeps the save (T25), unless it
+/// has refused to.
+fn save_note(g: &Game) -> &'static str {
+    if g.store_ok == Some(false) {
+        "save.no_browser"
+    } else {
+        "save.explain"
+    }
+}
+
 fn save_panel(g: &Game) -> Panel {
     let t = &g.text;
     Panel {
         id: "save".into(),
         heading: t.get("save.heading"),
-        text: format!("{}\n{}", purse(g), t.get("save.explain")),
+        text: format!("{}\n{}", purse(g), t.get(save_note(g))),
         actions: vec![
             act("page.download", "", t.get("save.download")),
             act("page.load", "", t.get("save.load")),
@@ -2109,7 +2119,8 @@ fn results(g: &Game, ui: &mut Ui) {
         id: "results".into(),
         kind: "list".into(),
         heading: purse(g),
-        text: if g.saved_since_run {
+        // the browser keeps the save; a reminder only when it will not
+        text: if g.saved_since_run || g.store_ok != Some(false) {
             String::new()
         } else {
             t.get("results.save_reminder")
@@ -2117,11 +2128,11 @@ fn results(g: &Game, ui: &mut Ui) {
         items,
         ..Panel::default()
     });
-    let mut actions = vec![primary(act("page.download", "", t.get("save.download")))];
+    let mut actions = vec![act("page.download", "", t.get("save.download"))];
     if g.session.as_ref().map(|n| n.peer.is_some()).unwrap_or(false) {
-        actions.push(act("screen.show", "coop", t.get("results.lobby")));
+        actions.push(primary(act("screen.show", "coop", t.get("results.lobby"))));
     } else {
-        actions.push(act("run.start", "", t.get("results.again")));
+        actions.push(primary(act("run.start", "", t.get("results.again"))));
     }
     actions.push(act("screen.show", "hangar", t.get("results.hangar")));
     actions.push(back(g));
@@ -2138,6 +2149,29 @@ mod tests {
     use super::*;
     use crate::game::tests::game;
     use crate::game::Raw;
+
+    #[test]
+    fn the_download_reminder_shows_only_when_the_browser_will_not_keep_the_save() {
+        let text = |g: &Game, id: &str| {
+            build(g)
+                .panels
+                .into_iter()
+                .find(|p| p.id == id)
+                .map(|p| p.text)
+                .unwrap_or_default()
+        };
+        let mut g = game();
+        g.storage_ok(true);
+        assert!(text(&g, "save").contains("saves in this browser by itself"));
+        g.act("screen.show", "hangar").unwrap();
+        g.act("run.start", "").unwrap();
+        g.act("run.quit", "").unwrap();
+        assert_eq!(text(&g, "results"), "", "the browser keeps it: no reminder");
+        g.storage_ok(false);
+        assert!(text(&g, "results").starts_with("Your progress is not in a file yet"));
+        g.act("screen.show", "title").unwrap();
+        assert!(text(&g, "save").contains("This browser is not keeping your save"));
+    }
 
     fn room(g: &Game) -> Panel {
         build(g)
@@ -2470,6 +2504,9 @@ mod tests {
             "coop.reply_prompt",
             "coop.copied",
             "coop.copy_failed",
+            "save.no_browser",
+            "save.stored_unreadable",
+            "results.save_reminder",
             "coop.copy_invitation",
             "coop.copy_reply",
             "coop.connect",

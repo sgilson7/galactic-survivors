@@ -775,5 +775,47 @@
     "find": "        if over || lost_partner {",
     "replace": "        if over {",
     "test": "leaving_co_op_keeps_your_progress"
+  },
+  {
+    "name": "a changed save is not stored again (T25)",
+    "file": "crates/core/src/game.rs",
+    "find": "        if self.screen == Screen::Run || self.stored.as_ref() == Some(&self.save) {",
+    "replace": "        if self.screen == Screen::Run || self.stored.is_some() {",
+    "test": "the_save_is_stored_once_after_each_change_and_never_mid_run"
+  },
+  {
+    "name": "the save is stored mid-run (T25)",
+    "file": "crates/core/src/game.rs",
+    "find": "        if self.screen == Screen::Run || self.stored.as_ref() == Some(&self.save) {",
+    "replace": "        if self.stored.as_ref() == Some(&self.save) {",
+    "test": "the_save_is_stored_once_after_each_change_and_never_mid_run"
+  },
+  {
+    "name": "an unreadable stored save is written over (T25)",
+    "file": "crates/core/src/game.rs",
+    "find": "            Err(_) => {\n                self.notice = \"save.stored_unreadable\".into();\n                text.to_string()\n            }",
+    "replace": "            Err(_) => String::new(),",
+    "test": "an_unreadable_stored_save_is_set_aside_for_a_new_one"
+  },
+  {
+    "name": "a refused store is not tried again (T25)",
+    "file": "crates/core/src/game.rs",
+    "find": "            // try again on the next change\n            self.stored = None;",
+    "replace": "",
+    "test": "a_stored_save_comes_back_and_a_refused_store_is_tried_again"
+  },
+  {
+    "name": "a restored save is stored again at once (T25)",
+    "file": "crates/core/src/game.rs",
+    "find": "                self.stored = Some(save.clone());\n                self.save = save;",
+    "replace": "                self.save = save;",
+    "test": "a_stored_save_comes_back_and_a_refused_store_is_tried_again"
+  },
+  {
+    "name": "the download reminder shows though the browser keeps the save (T25)",
+    "file": "crates/core/src/view.rs",
+    "find": "        text: if g.saved_since_run || g.store_ok != Some(false) {",
+    "replace": "        text: if g.saved_since_run {",
+    "test": "the_download_reminder_shows_only_when_the_browser_will_not_keep_the_save"
   }
 ]

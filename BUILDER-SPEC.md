@@ -65,4 +65,5 @@ These stay with the person and go in `BRIEF.md` or `PLAN.md`:
 | D3, D4, page scan | `web/net/` holds the online transport: `config.js` may hold timings and the relay addresses, `rtc.js` may name the WebRTC and WebSocket APIs, and `connect-src` lists the relays in `config.js` | online co-op is in the brief (kits/online) | `crates/core/tests/online_fence.rs`; SECOND-ORDER.md R1.4 |
 | page scan, fence | the page scan and the online fence skip `.png` files under `web/` | pictures are binary and hold no code or address | SECOND-ORDER.md R1.3 |
 | D18 | the art uses the project's own style pack, `styles/galactic/` | the brief names a look | BRIEF.md, Style |
+| D17 | the save is kept in `localStorage` under one key; only `web/store.js` may name storage, and only `localStorage`; the core decides what is stored and when | the person asked for automatic saving (TRIAGE T25), replacing the brief's download-only save | `crates/core/tests/no_storage.rs`; SECOND-ORDER.md R4.22 |
 | D11 | unchanged; the release build stays at `opt-level = "s"` | a run of a few hundred enemies stays well under a frame (MEASUREMENTS.md) | — |

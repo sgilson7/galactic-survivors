@@ -1,6 +1,7 @@
 // The page draws what the core returns and decides nothing.
 //
-// Every display frame it hands the core the time and the input, replays
+// Every display frame it hands the core the time and the input, stores the
+// save when the core says it changed (store.js), replays
 // the core's draw list on the canvas, and rebuilds the menus when the
 // core's screen description changes. Buttons send their action back
 // through `act`. Actions named `page.*` are input and output the core
@@ -9,6 +10,7 @@
 import init, { Galaxy } from "./pkg/tool_shim.js";
 import { createRenderer } from "./render2d.js";
 import { makeInput } from "./input.js";
+import * as store from "./store.js";
 
 const el = (id) => document.getElementById(id);
 const make = (tag, text, cls) => {
@@ -284,6 +286,8 @@ function frame(now) {
     size = renderer.resize();
     game.resize(size.width, size.height);
   }
+  const saved = game.take_autosave();
+  if (saved) game.storage_ok(store.write(saved));
   const i = input.read();
   game.advance(now, i.bits, i.sx, i.sy, i.px, i.py, i.pointer);
   if (online) {
@@ -310,6 +314,8 @@ async function main() {
     message(game.error());
     return;
   }
+  const aside = game.restore(store.read());
+  if (aside) store.setAside(aside);
   const assets = JSON.parse(game.assets());
   const canvas = el("view");
   renderer = createRenderer(canvas, assets.draw);

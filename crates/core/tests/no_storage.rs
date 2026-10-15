@@ -1,10 +1,11 @@
-//! Reference default (D17): the page keeps nothing between visits. This reads
-//! every file under web/ (vendor/ aside) and fails if one names a browser
-//! storage API. From Feedback Drafts and Status Trends.
-//!
-//! When the brief allows storage, delete this file and record the change in
-//! BUILDER-SPEC.md. Then let the core write and read what is stored, and test
-//! that an unreadable save is treated as a new one.
+//! Reference default (D17), changed in this project (T25): the page keeps
+//! one thing between visits, the save, in `localStorage`, and only
+//! `web/store.js` may touch it. This reads every file under web/ (vendor/
+//! aside) and fails if any other file names a browser storage API, or if
+//! store.js names one other than `localStorage`. The core decides what is
+//! stored and when (`Game::take_autosave`, `Game::restore`); an unreadable
+//! save is treated as a new one and set aside (`game.rs` tests). From
+//! Feedback Drafts and Status Trends.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,15 +61,25 @@ fn the_page_names_no_browser_storage() {
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
+        let store = path.ends_with("web/store.js");
         for name in storage_names_in(&text) {
-            found.push(format!("{}: {name}", path.display()));
+            if !(store && name == "localStorage") {
+                found.push(format!("{}: {name}", path.display()));
+            }
         }
     }
     assert!(
         found.is_empty(),
-        "browser storage in the page (D17; the brief must allow it):\n{}",
+        "browser storage outside web/store.js, or other than localStorage (D17, T25):\n{}",
         found.join("\n")
     );
+}
+
+#[test]
+fn the_save_store_exists_and_names_only_local_storage() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/store.js");
+    let text = fs::read_to_string(&path).expect("web/store.js");
+    assert_eq!(storage_names_in(&text), vec!["localStorage"]);
 }
 
 #[test]

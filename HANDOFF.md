@@ -57,6 +57,11 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 - **Two older bugs found on the way:** Leave never closed the room (R4.14), and after a co-op run the session stayed "playing", so changes after Results went unsent (R4.15).
 - `PROTOCOL` is 3: a tab opened before this change is told to reload.
 
+## What changed for saving (15 October 2026, TRIAGE T25)
+
+- **The browser keeps the save by itself** (R4.22), after every run and every purchase, and restores it when the page opens. Download and Load stay, as a backup and for another computer. A private window that refuses storage is told so, and Results then asks for a download. A save the browser holds but the game cannot read is set aside, not written over.
+- Every way out of co-op keeps what the run paid (R4.21, now tested).
+
 ## What passed
 
 | Check | Result |
@@ -95,6 +100,10 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `python3 tools/art/art.py --check-only` | 95 pictures pass, after the playtest round |
 
 ## Try these by hand first
+
+After browser saving:
+1. Play a run, close the tab, and open the game again: your gold and the run should still be there.
+2. Open the game in a private window: the save panel should say the browser is not keeping your save.
 
 After the co-op lobby:
 1. Host a room on one computer and send the link to your partner on another. Their page should open in your room. Then try typing the code instead (R4.18).

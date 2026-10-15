@@ -62,7 +62,7 @@ def run(page, check, engine):
     page.click("#overlay button[data-action='run.quit']")
     page.wait_for_selector("body[data-screen='results']", state="attached")
     check(page.text_content("#title") == s("results.lost"), "ending the run shows the results")
-    check(s("results.save_reminder") in page.inner_text("#panels"), "the results remind the player to download the save")
+    check(s("results.save_reminder") not in page.inner_text("#panels"), "the browser keeps the save, so the results ask for no download (T25)")
 
     # the save downloads as a file and loads back
     with page.expect_download() as d:
@@ -78,3 +78,12 @@ def run(page, check, engine):
     fc.value.set_files(path)
     page.wait_for_selector(f"#message:has-text('{s('save.loaded')}')")
     check(True, "the save loads back from the file")
+
+    # the browser kept the save: after a reload the run is still counted (T25)
+    page.reload()
+    page.wait_for_selector("body[data-ready]", state="attached")
+    check(s("save.explain") in page.inner_text("#panel-save"), "the save panel says the browser keeps the save")
+    with page.expect_download() as d:
+        page.click("#panel-save button[data-action='page.download']")
+    kept = json.loads(pathlib.Path(d.value.path()).read_text())
+    check(kept.get("stats", {}).get("runs") == 1, "the save survives a reload")

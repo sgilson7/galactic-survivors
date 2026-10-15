@@ -14,6 +14,10 @@ The agent decided: the repository is `sgilson7/galactic-survivors`, published fr
 
 The agent decided: the core writes and reads the save as JSON; the page downloads it and reads a chosen file. D17 (no browser storage) is unchanged. `meta.rs`.
 
+> yeah save automatically to the browser and then deploy, remembering to press save feels like its just going to result in annoyance (15 October 2026, T25)
+
+The agent decided: the browser keeps the save by itself after every run and purchase, in `localStorage`, read back when the page opens; the downloaded file stays as a backup and for moving computers. This changes D17 for the save alone (BUILDER-SPEC change table, SECOND-ORDER R4.22).
+
 > xp and gold: not allowed
 
 The agent decided: no outfitter rank or module may raise experience or gold; the content file is refused at load if one does (`content::FORBIDDEN_STATS`). The achievement XP bonus stays, because it is earned, not bought.

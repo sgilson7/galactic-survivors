@@ -103,6 +103,26 @@ impl Api {
         self.game.as_ref().map(|g| g.save_text()).unwrap_or_default()
     }
 
+    /// The save to store in this browser, or empty when it has not changed.
+    pub fn take_autosave(&mut self) -> String {
+        self.game
+            .as_mut()
+            .and_then(|g| g.take_autosave())
+            .unwrap_or_default()
+    }
+
+    /// Restores the save this browser kept; returns a save to set aside
+    /// because it could not be read, or empty.
+    pub fn restore(&mut self, text: &str) -> String {
+        self.game.as_mut().map(|g| g.restore(text)).unwrap_or_default()
+    }
+
+    pub fn storage_ok(&mut self, ok: bool) {
+        if let Some(g) = self.game.as_mut() {
+            g.storage_ok(ok);
+        }
+    }
+
     /// The file name for a downloaded save.
     pub fn save_name(&self) -> String {
         "galactic-survivors-save.json".into()
