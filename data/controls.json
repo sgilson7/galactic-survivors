@@ -1,0 +1,15 @@
+{
+  "_about": "Which action each key code sends. The core gives each action its bit (game.rs BITS) and decides what it does.",
+  "KeyW": "up", "ArrowUp": "up",
+  "KeyS": "down", "ArrowDown": "down",
+  "KeyA": "left", "ArrowLeft": "left",
+  "KeyD": "right", "ArrowRight": "right",
+  "Space": "dash", "ShiftLeft": "dash",
+  "Digit1": "card1", "Numpad1": "card1",
+  "Digit2": "card2", "Numpad2": "card2",
+  "Digit3": "card3", "Numpad3": "card3",
+  "KeyR": "reroll",
+  "Escape": "pause", "KeyP": "pause",
+  "KeyI": "inspect", "KeyB": "inspect",
+  "KeyE": "rigs"
+}

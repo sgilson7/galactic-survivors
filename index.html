@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- connect-src is 'self' plus exactly the relays in net/config.js, which
+       only co-op by room code reaches (kits/online, online_fence.rs). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss://nos.lol wss://nostr.mom wss://relay.damus.io wss://relay.primal.net wss://nostr-01.yakihonne.com wss://nostr.sathoarder.com wss://relay.mostro.network; style-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Galactic Survivors</title>
+  <meta name="description" content="A survivors-like set on an alien planet: steer, dodge, pick upgrades, and play solo or two-player co-op in the browser.">
+  <link rel="stylesheet" href="style.css?v=c82632609d9e">
+</head>
+<body data-ready="false" data-screen="loading">
+  <canvas id="view" aria-label="The run, drawn from above"></canvas>
+  <div id="knob" hidden></div>
+  <div id="overlay" hidden></div>
+  <div id="hud">
+    <div id="hold">
+      <div id="chips" aria-label="Your runes" aria-live="off"></div>
+      <div id="build" aria-label="Your abilities"></div>
+    </div>
+    <div id="runbar"></div>
+  </div>
+  <main id="menu">
+    <header>
+      <h1 id="title">Galactic Survivors</h1>
+      <p id="subtitle"></p>
+    </header>
+    <div id="panels"></div>
+    <div id="ask" hidden></div>
+  </main>
+  <p id="message" role="status" aria-live="polite"></p>
+  <input id="file" type="file" accept=".json,application/json" hidden>
+  <noscript><p>This game needs JavaScript and WebAssembly.</p></noscript>
+  <script type="module" src="app.js?v=c82632609d9e"></script>
+</body>
+</html>

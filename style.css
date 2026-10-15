@@ -1,0 +1,426 @@
+/* Galactic Survivors. One dark look, chosen for the playfield: a calm
+   violet-slate ground so the bright players and the magenta enemy shots
+   always stand out (BRIEF.md, Style). The menus borrow Marathon's graphic
+   marks: hard edges, a hazard stripe, condensed capitals. Colours are the
+   style pack's roles (styles/galactic/palette.json); the canvas reads them
+   by name (crates/core/src/draw.rs PALETTE). */
+:root {
+  color-scheme: dark;
+  --none: transparent;
+  --ink: #14111c;
+  --ground: #2d2939;
+  --panel: #1d1a28;
+  --text: #f2f5f7;
+  --muted: #a69fbd;
+  --hp: #ff5c70;
+  --hp-back: #3b3650;
+  --xp: #4fefff;
+  --shot: #ff3dcf;
+  --shot-rim: #ffc4f1;
+  --bolt: #fff3c4;
+  --ring: #bff7ff;
+  --gold: #ffc93c;
+  --heal: #7dffb2;
+  --rift: #b48cff;
+  --raid: #f2c230;
+  --boss: #ff7b66;
+  --flash: #ffffff;
+  --shadow: #0f0d16;
+  --seat0: #ffb23e;
+  --seat1: #33d1bf;
+  --ticket: #b48cff;
+  --cache: #e3dfd0;
+  --rock: #4b4562;
+  /* ground fields and the rune trail (T14): flat and dim under everything */
+  --fire: #ff8a3d;
+  --frost: #9fd8ff;
+  --charge: #e9f56a;
+  --slick: #6a5a8c;
+  --steam: #d9d4e8;
+  --trail: #8f86ad;
+  /* rune chips: Gear Master 2D's frost, searing and misfire */
+  --rune-circle: #5aa8d8;
+  --rune-triangle: #c2643f;
+  --rune-square: #c8a33f;
+  --accent: #b8e04a;
+  --line: #3b3650;
+  --common: #a69fbd;
+  --rare: #4fefff;
+  --epic: #ffb23e;
+  --hud-font: "Avenir Next Condensed", "DIN Condensed", "Bahnschrift", "Arial Narrow", system-ui, sans-serif;
+  --body-font: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--text);
+  font: 15px/1.5 var(--body-font);
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+/* the playfield */
+#view {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body:not([data-screen="run"]) #view,
+body:not([data-screen="run"]) #hud,
+body:not([data-screen="run"]) #overlay { display: none; }
+body[data-screen="run"] #menu { display: none; }
+#knob {
+  position: fixed;
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  border: 3px solid var(--text);
+  border-radius: 50%;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* the menus, over the title picture */
+#menu {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 96px max(16px, env(safe-area-inset-left));
+  background:
+    linear-gradient(90deg, rgba(20, 17, 28, 0.94) 0%, rgba(20, 17, 28, 0.82) 55%, rgba(20, 17, 28, 0.55) 100%),
+    url("art/title.png") center / cover no-repeat,
+    var(--panel);
+}
+#menu > * { max-width: 920px; margin-left: auto; margin-right: auto; }
+header { padding: 8px 0 16px; border-bottom: 3px solid var(--accent); margin-bottom: 20px; position: relative; }
+header::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -3px;
+  width: 120px;
+  height: 10px;
+  background: repeating-linear-gradient(135deg, var(--raid) 0 8px, var(--ink) 8px 16px);
+}
+h1 {
+  font: 800 clamp(34px, 7vw, 64px)/0.95 var(--hud-font);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+#subtitle { color: var(--muted); margin: 0; max-width: 60ch; }
+h2 {
+  font: 700 18px/1.2 var(--hud-font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+h3 { font: 700 16px/1.2 var(--hud-font); letter-spacing: 0.04em; text-transform: uppercase; margin: 0; }
+.panel { margin: 0 0 24px; }
+.panel .lead { color: var(--muted); margin: 0 0 12px; max-width: 70ch; white-space: pre-line; }
+.items { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.panel[data-kind="list"] .items { grid-template-columns: 1fr; }
+.item {
+  display: flex;
+  gap: 12px;
+  background: rgba(29, 26, 40, 0.92);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  padding: 12px;
+  min-width: 0;
+}
+.item img { width: 56px; height: 56px; flex: none; image-rendering: auto; }
+.item .body { min-width: 0; flex: 1; display: grid; gap: 6px; align-content: start; }
+.item .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
+.item p { margin: 0; color: var(--muted); font-size: 14px; }
+.tag { font: 600 13px var(--hud-font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); }
+.item[data-tone="chosen"] { border-left-color: var(--accent); }
+.item[data-tone="locked"] { opacity: 0.7; }
+.item[data-tone="done"] { border-left-color: var(--heal); }
+.item[data-tone="common"] { border-left-color: var(--common); }
+.item[data-tone="rare"] { border-left-color: var(--rare); }
+.item[data-tone="epic"] { border-left-color: var(--epic); }
+.bar { height: 6px; background: var(--hp-back); }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: 700 15px/1 var(--hud-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  padding: 10px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+button:hover:not([disabled]) { border-color: var(--text); }
+button:focus-visible { outline: 3px solid var(--xp); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--ink); border-color: var(--accent); }
+button[disabled] { opacity: 0.45; cursor: default; }
+kbd { font: 600 12px var(--hud-font); border: 1px solid currentColor; padding: 1px 5px; opacity: 0.8; }
+.panel[data-kind="menu"] > .actions { flex-direction: column; align-items: stretch; max-width: 360px; }
+.panel[data-kind="menu"] > .actions button { justify-content: flex-start; }
+.panel[data-kind="bar"] { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(transparent, var(--panel) 30%); }
+#ask { background: var(--panel); border: 2px solid var(--accent); padding: 16px; margin-bottom: 24px; display: grid; gap: 10px; }
+#ask p { margin: 0; }
+#ask textarea { width: 100%; min-height: 64px; font: 14px/1.4 ui-monospace, Menlo, monospace; background: var(--ink); color: var(--text); border: 1px solid var(--line); padding: 8px; word-break: break-all; }
+#message {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: min(640px, calc(100% - 32px));
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  padding: 10px 14px;
+  z-index: 5;
+}
+#message:empty { display: none; }
+
+/* the salvage reveal: cards turn over one after another, unless the player
+   asked for reduced motion or pressed Show all */
+.panel[data-kind="reveal"] .item { animation: turn 0.4s ease-out both; }
+.panel[data-kind="reveal"] .item:nth-child(2) { animation-delay: 0.25s; }
+.panel[data-kind="reveal"] .item:nth-child(3) { animation-delay: 0.5s; }
+.panel[data-kind="reveal"] .item:nth-child(4) { animation-delay: 0.75s; }
+.panel[data-kind="reveal"] .item:nth-child(5) { animation-delay: 1s; }
+.panel[data-kind="reveal"] .item:nth-child(6) { animation-delay: 1.25s; }
+.panel[data-kind="reveal"] .item:nth-child(7) { animation-delay: 1.5s; }
+.panel[data-kind="reveal"] .item:nth-child(8) { animation-delay: 1.75s; }
+.panel[data-kind="reveal"] .item:nth-child(9) { animation-delay: 2s; }
+.panel[data-kind="reveal"] .item:nth-child(10) { animation-delay: 2.25s; }
+@keyframes turn { from { opacity: 0; transform: rotateY(80deg); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .panel[data-kind="reveal"] .item { animation: none; } }
+
+/* during a run */
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(20, 17, 28, 0.55);
+  z-index: 3;
+  overflow-y: auto;
+}
+#overlay .panel { width: min(960px, 100%); margin: 0; background: rgba(29, 26, 40, 0.96); border: 2px solid var(--accent); padding: 16px; }
+#overlay .panel[data-kind="note"] { width: min(480px, 100%); text-align: center; }
+#overlay .panel[data-kind="note"] { pointer-events: none; }
+#overlay:has(.panel[data-kind="note"]) { background: transparent; pointer-events: none; align-items: flex-start; padding-top: 120px; }
+#overlay .items { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+#overlay .item { flex-direction: column; }
+#overlay .item img { width: 64px; height: 64px; }
+#overlay .item[data-tone="epic"] { border-color: var(--epic); }
+#overlay .panel > .actions { margin-top: 12px; }
+
+/* the rig window (T15): docked at the bottom, the field left in view, since
+   the run keeps going while it is open */
+#overlay:has(.panel[data-kind="rigs"]) { background: transparent; align-items: flex-end; pointer-events: none; padding: 8px; }
+#overlay .panel[data-kind="rigs"] { pointer-events: auto; width: min(700px, 100%); padding: 8px 10px; background: rgba(29, 26, 40, 0.9); display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: start; }
+#overlay .panel[data-kind="rigs"] h2 { font-size: 15px; margin: 0; grid-column: 1; }
+#overlay .panel[data-kind="rigs"] .lead { font-size: 12px; margin: 0 0 6px; grid-column: 1 / -1; }
+#overlay .panel[data-kind="rigs"] > .actions { grid-column: 2; grid-row: 1; margin: 0; }
+#overlay .panel[data-kind="rigs"] > .actions button { padding: 4px 10px; font-size: 13px; }
+#overlay .panel[data-kind="rigs"] .items { grid-column: 1 / -1; grid-template-columns: minmax(86px, 128px); grid-auto-columns: 58px; grid-auto-rows: 50px; gap: 4px; }
+#overlay .panel[data-kind="rigs"] .item { padding: 2px; gap: 0; align-items: center; justify-content: center; text-align: center; border-left-width: 3px; overflow: hidden; }
+#overlay .panel[data-kind="rigs"] .item img { width: 30px; height: 30px; }
+#overlay .panel[data-kind="rigs"] .item h3 { font-size: 9px; line-height: 1; }
+#overlay .panel[data-kind="rigs"] .item .tag { display: none; }
+#overlay .panel[data-kind="rigs"] .item p { font-size: 10px; line-height: 1.15; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="label"] { border: 0; background: none; align-items: flex-start; text-align: left; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="label"] h3 { font-size: 11px; }
+#overlay .panel[data-kind="rigs"] .item[data-tone="empty"] { border-style: dashed; opacity: 0.6; }
+.item[data-tone="payload"] { border-left-color: var(--seat0); }
+.item[data-tone="modifier"] { border-left-color: var(--hp); }
+.item[data-tone="formation"] { border-left-color: var(--xp); }
+.item[data-tone="trigger"] { border-left-color: var(--rift); }
+.item[data-tone="part"] { border-left-color: var(--hp); }
+@media (max-width: 600px) {
+  #overlay .panel[data-kind="rigs"] .items { grid-template-columns: 64px; grid-auto-columns: 46px; grid-auto-rows: 44px; }
+  #overlay .panel[data-kind="rigs"] .item img { width: 24px; height: 24px; }
+  #overlay .panel[data-kind="rigs"] .item h3 { display: none; }
+  #overlay .panel[data-kind="rigs"] .item[data-tone="label"] h3 { display: block; }
+  #overlay .panel[data-kind="rigs"] .item[data-tone="label"] p { display: none; }
+}
+
+#hud {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  pointer-events: none;
+  z-index: 2;
+}
+#hold { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+#build { display: flex; flex-wrap: wrap; gap: 6px; }
+/* rune chips (after Gear Master 2D's curse chips): a solid block per shape,
+   dark words on it, the shape named in words as well as by colour */
+#chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#chips:empty { display: none; }
+.chip {
+  font: 700 13px/1 var(--hud-font);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  background: var(--muted);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.chip[data-tone="circle"] { background: var(--rune-circle); }
+.chip[data-tone="triangle"] { background: var(--rune-triangle); }
+.chip[data-tone="square"] { background: var(--rune-square); }
+#build .item { padding: 4px; gap: 4px; border-left-width: 3px; background: rgba(20, 17, 28, 0.7); }
+#build .item img { width: 32px; height: 32px; }
+#build .item h3, #build .item p { display: none; }
+#build .item .tag { font-size: 11px; }
+#runbar { pointer-events: auto; }
+#runbar .panel { margin: 0; padding: 0; background: none; position: static; }
+@media (max-width: 600px) {
+  .items { grid-template-columns: 1fr; }
+  #overlay .item { flex-direction: row; }
+  #overlay .item p { font-size: 13px; }
+}
+
+/* tiles: gear, stash and the achievement grid (T4, T9) */
+.item[role="button"] { cursor: pointer; position: relative; }
+.item[role="button"]:hover { border-color: var(--text); }
+.item[role="button"]:focus-visible { outline: 3px solid var(--xp); outline-offset: 2px; }
+.item[data-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.item .badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font: 700 11px var(--hud-font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--ink);
+  padding: 1px 5px;
+}
+.item[data-tone="empty"] img, .item[data-tone="locked"] img { opacity: 0.5; }
+.item[data-tone="hidden"] { opacity: 0.55; border-style: dashed; }
+
+/* the gear screen: character tabs, then the doll beside the stash, then
+   the chosen piece */
+body[data-screen="gear"] #menu > #panels { display: grid; gap: 0 24px; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); max-width: 1100px; }
+body[data-screen="gear"] #menu > header { max-width: 1100px; }
+body[data-screen="gear"] #panel-who,
+body[data-screen="gear"] #panel-nav { grid-column: 1 / -1; }
+body[data-screen="gear"] #panel-doll { grid-column: 1; grid-row: 2; }
+body[data-screen="gear"] #panel-detail { grid-column: 1; grid-row: 3; }
+body[data-screen="gear"] #panel-inventory { grid-column: 2; grid-row: 2 / span 2; }
+.panel[data-kind="tabs"] > .actions { gap: 4px; }
+.panel[data-kind="doll"] .items {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "s0 s1" "s2 s3";
+  background:
+    radial-gradient(circle at 50% 40%, rgba(184, 224, 74, 0.08), transparent 60%),
+    rgba(20, 17, 28, 0.85);
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+#item-slot0 { grid-area: s0; }
+#item-slot1 { grid-area: s1; }
+#item-slot2 { grid-area: s2; }
+#item-slot3 { grid-area: s3; }
+.panel[data-kind="doll"] .item { flex-direction: column; align-items: center; text-align: center; padding: 8px 4px; gap: 4px; }
+.panel[data-kind="doll"] .item .head { justify-content: center; }
+.panel[data-kind="doll"] .item h3 { font-size: 13px; }
+.panel[data-kind="doll"] .item p { font-size: 12px; }
+.panel[data-kind="doll"] .item img { width: 56px; height: 56px; }
+.panel[data-kind="grid"] .items {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+  background: rgba(20, 17, 28, 0.85);
+  border: 1px solid var(--line);
+  padding: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+  align-content: start;
+}
+.panel[data-kind="grid"] .item { flex-direction: column; align-items: center; padding: 6px 4px 4px; border-left-width: 1px; border-bottom: 4px solid var(--line); gap: 2px; }
+.panel[data-kind="grid"] .item[data-tone="common"] { border-bottom-color: var(--common); }
+.panel[data-kind="grid"] .item[data-tone="rare"] { border-bottom-color: var(--rare); }
+.panel[data-kind="grid"] .item[data-tone="epic"] { border-bottom-color: var(--epic); }
+.panel[data-kind="grid"] .item img { width: 48px; height: 48px; }
+.panel[data-kind="grid"] .item h3 { display: none; }
+.panel[data-kind="grid"] .item .head { justify-content: center; }
+.panel[data-kind="grid"] > .actions { margin-top: 8px; }
+.panel[data-kind="detail"] .item img { width: 72px; height: 72px; }
+.panel[data-kind="detail"] .item .actions { margin-top: 4px; }
+
+/* the achievement grid: tiles placed by column and row from the core */
+.panel[data-kind="achgrid"] .items {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 6px;
+}
+.panel[data-kind="achgrid"] .item { flex-direction: column; align-items: center; justify-content: center; padding: 6px 4px; text-align: center; border-left-width: 1px; gap: 4px; }
+.panel[data-kind="achgrid"] .item img { width: 44px; height: 44px; }
+.panel[data-kind="achgrid"] .item .body { width: 100%; }
+.panel[data-kind="achgrid"] .item h3 { font-size: 11px; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.panel[data-kind="achgrid"] .item[data-tone="done"] { border-color: var(--heal); background: rgba(125, 255, 178, 0.1); }
+body[data-screen="achievements"] #menu > #panels { display: grid; gap: 0 20px; grid-template-columns: minmax(0, 1fr) 300px; max-width: 1180px; }
+body[data-screen="achievements"] #menu > header { max-width: 1180px; }
+body[data-screen="achievements"] #panel-achievements { grid-column: 1; grid-row: 1; }
+body[data-screen="achievements"] #panel-detail { grid-column: 2; grid-row: 1; align-self: start; position: sticky; top: 0; padding-top: 34px; }
+body[data-screen="achievements"] #panel-nav { grid-column: 1 / -1; }
+body[data-screen="achievements"] #panel-detail .item { flex-direction: column; }
+.panel[data-kind="achgrid"] .item[data-tone="hidden"] h3 { display: none; }
+
+/* the build and the codex over a run (T1, T2, T10) */
+#overlay { align-items: safe center; }
+#overlay .panel[data-kind="build"] .items,
+#overlay .panel[data-kind="codex"] .items { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+#overlay .panel[data-kind="build"] .item,
+#overlay .panel[data-kind="codex"] .item { flex-direction: row; }
+#overlay .panel[data-kind="build"] .item img,
+#overlay .panel[data-kind="codex"] .item img { width: 48px; height: 48px; }
+#overlay .panel[data-kind="codex"] .items { max-height: 60vh; overflow-y: auto; }
+.panel[data-kind="codex"] > .actions { margin: 0 0 12px; order: -1; }
+.panel[data-kind="codex"] { display: flex; flex-direction: column; }
+.panel[data-kind="codex"] > h2 { order: -3; }
+.panel[data-kind="codex"] > .lead { order: -2; }
+#build .item[data-tone="epic"] { border-color: var(--epic); }
+
+/* The co-op lobby (T24): the room on the left, your loadout on the right. */
+body[data-screen="coop"] #menu > #panels:has(#panel-room) { display: grid; gap: 0 24px; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); grid-auto-flow: row dense; max-width: 1100px; }
+body[data-screen="coop"] #menu > header { max-width: 1100px; }
+body[data-screen="coop"] #panels > .panel { grid-column: 2; }
+body[data-screen="coop"] #panels > #panel-room { grid-column: 1; grid-row: 1 / span 6; align-self: start; position: sticky; top: 12px; }
+.panel[data-kind="room"] .items { grid-template-columns: 1fr; margin-bottom: 12px; }
+.panel[data-kind="room"] .item[data-tone="empty"] { border-style: dashed; opacity: 0.7; }
+.panel[data-kind="room"] > .actions { flex-direction: column; align-items: stretch; }
+
+@media (max-width: 760px) {
+  body[data-screen="coop"] #menu > #panels:has(#panel-room),
+  body[data-screen="gear"] #menu > #panels,
+  body[data-screen="achievements"] #menu > #panels { display: block; }
+  body[data-screen="coop"] #panels > #panel-room { position: static; }
+  body[data-screen="achievements"] #panel-detail { position: static; padding-top: 0; }
+  .panel[data-kind="achgrid"] .items { gap: 3px; }
+  .panel[data-kind="achgrid"] .item { padding: 3px 1px; }
+  .panel[data-kind="achgrid"] .item img { width: 30px; height: 30px; }
+  .panel[data-kind="achgrid"] .item h3 { display: none; }
+  .panel[data-kind="achgrid"] .item .bar { display: none; }
+}
