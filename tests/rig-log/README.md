@@ -4,7 +4,7 @@ The rig space test (`crates/core/tests/rig_space.rs`) plays a rig for four secon
 
     cargo test -p tool_core --test rig_space -- --ignored --nocapture logbook
 
-`RIG_BUDGET_S` sets how long a run may play (120 seconds unless set). `RIG_LENGTHS` sets which rig lengths it covers (1,2,3,4 unless set), and `RIG_LEVELS` which ability levels (1 unless set). Shorter rigs come first, and a run stops after the block it is playing when the budget is spent. The test fails when any rig in the log breaks a rule.
+`RIG_BUDGET_S` sets how long a run may play (120 seconds unless set). `RIG_LENGTHS` sets which rig lengths it covers (1,2,3,4 unless set), and `RIG_LEVELS` which ability levels (1 unless set). Rigs of up to four tokens are logged in number order, all of them. Five and six tokens are far too many to finish, so they are logged in a fixed shuffled order: a run that stops early has logged an even sample, and later runs fill in the rest. Shorter rigs come first, and a run stops after the block it is playing when the budget is spent. The test fails when any rig in the log breaks a rule.
 
 ## Where it lives
 
@@ -34,7 +34,7 @@ The full log stays on the computer that runs it, in `rig-log/` at the top of the
 A line is played again when its key no longer matches. The key covers:
 
 - the rule code: `world.rs`, `arsenal.rs`, `rig.rs`, `field.rs`, `rune.rs`, `geom.rs`, `fx.rs`, `rng.rs`, `content.rs` and `meta.rs` in `crates/core/src/`;
-- the scene and rules: the part of `rig_space.rs` above the logbook;
+- the scene and rules: `crates/core/tests/support/rig_rules.rs` (editing `rig_space.rs` itself changes no line);
 - the data that isn't an ability or a part: enemies, run settings, fields and runes;
 - the rig's level;
 - the data of each ability and part in the rig, so a change to one part touches only the rigs that hold it, about 7% of four-token rigs.

@@ -14,55 +14,15 @@
 //!   RIG_LEN=4 RIG_N=200000 RIG_SEED=7 cargo test ... (a sample)
 //!   RIG_LEN=4 RIG_SHARD=0/8 cargo test ...            (one eighth of all)
 //!
-//! The rules:
-//!
-//! * panic: playing the rig does not panic (overflow checks are on);
-//! * recharge: the rig fires exactly as often as its first payload's
-//!   recharge with every part's load added allows, worked out here from
-//!   the data (T16); a rig with no payload before its first trigger never
-//!   fires on its recharge;
-//! * stray: every shot and effect belongs to a payload in the rig or a rune;
-//! * depth: no trigger fires deeper than three;
-//! * bounds: shots, effects, echoes and fields stay under fixed ceilings;
-//! * health: no enemy has more health than its most;
-//! * gap: the same rig with an empty socket in the middle ends in the same
-//!   world;
-//! * rollback: a copy taken halfway and played on ends in the same world;
-//! * field: a payload that fired after a field modifier left that field
-//!   somewhere in the scene (or reacted with another field); a tether is
-//!   left out (alone it joins nothing), and so is a mine still waiting;
-//!   after a Wormhole a miss is only noted, since the payload may hit nothing;
-//! * formation: on the first tick, a payload after a formation makes the
-//!   formation's copies times what it makes alone.
-//!
-//! One more is counted but not failed: a payload before the first trigger
-//! that was never seen. A shot that hits on the tick it is fired is gone
-//! before it can be seen (Wormhole starts it inside an enemy).
+//! The scene and the rules are in `support/rig_rules.rs`.
+
+#[path = "support/rig_rules.rs"]
+mod rig_rules;
+use rig_rules::*;
 
 use std::collections::BTreeMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Instant;
-use tool_core::content::{Content, Kind, PartKind};
-use tool_core::geom::{px, ticks};
-use tool_core::meta::Save;
-use tool_core::world::{EffectKind, Input, Slot, World, DASH};
-
-/// Ticks a rig is played for: four seconds.
-const SCENE_TICKS: u32 = 240;
-const MAX_SHOTS: usize = 2048;
-const MAX_EFFECTS: usize = 1024;
-const MAX_ECHOES: usize = 512;
-
-fn quiet() -> Content {
-    let mut c = Content::parse(include_str!("../../../data/content.json")).unwrap();
-    c.waves.clear();
-    c.events.minibosses.clear();
-    c.events.rifts_s.clear();
-    c.events.raid.from_s = 100_000;
-    c.events.raid.to_s = 100_000;
-    c.events.final_boss.at_s = 100_000;
-    c
-}
+use tool_core::content::Content;
 
 /// Every token a socket can hold: payloads first, then parts.
 struct Tokens {
@@ -138,421 +98,6 @@ fn sample(t: &Tokens, len: usize, n: usize, seed: u64) -> Vec<Vec<usize>> {
             out.push(r);
         }
     }
-    out
-}
-
-#[derive(Default, Clone)]
-struct Tally {
-    played: u64,
-    failures: Vec<String>,
-    never_fired: BTreeMap<String, u64>,
-    /// A few of the rigs behind the counts above.
-    notes: Vec<String>,
-    most_shots: usize,
-    most_effects: usize,
-    most_echoes: usize,
-}
-
-impl Tally {
-    fn add(&mut self, o: Tally) {
-        self.played += o.played;
-        self.failures.extend(o.failures);
-        self.notes.extend(o.notes);
-        for (k, v) in o.never_fired {
-            *self.never_fired.entry(k).or_default() += v;
-        }
-        self.most_shots = self.most_shots.max(o.most_shots);
-        self.most_effects = self.most_effects.max(o.most_effects);
-        self.most_echoes = self.most_echoes.max(o.most_echoes);
-    }
-}
-
-/// The world with the rig in rig 1, every payload held at `level`, and
-/// six enemies that do not die around the player.
-fn scene(c: &Content, row: &[String], level: i32, gap: bool) -> World {
-    let load = Save::new(c, 1).loadout(c, "pathfinder");
-    let mut w = World::new(c, 5, &[load]);
-    let p = &mut w.players[0];
-    p.abilities.clear();
-    for r in p.rigs.iter_mut() {
-        r.sockets.iter_mut().for_each(|s| s.clear());
-    }
-    for id in row {
-        if c.ability(id).is_some() {
-            p.abilities.push(Slot {
-                id: id.clone(),
-                level,
-                cd: 0,
-            });
-        }
-    }
-    let mut sockets = row.to_vec();
-    if gap {
-        sockets.insert(row.len() / 2, String::new());
-    }
-    let width = sockets.len().max(p.rigs[0].sockets.len());
-    sockets.resize(width, String::new());
-    p.rigs[0].sockets = sockets;
-    p.rigs[0].cd = 0;
-    let carapace = c.enemy_index("carapace");
-    for k in 0..6 {
-        let at = tool_core::geom::from_angle(tool_core::fx::TURN * k / 6, px(220));
-        let i = w.spawn_foe(c, carapace, at);
-        w.foes[i].hp = 100_000;
-        w.foes[i].max_hp = 100_000;
-    }
-    w
-}
-
-/// The player walks a square, dashes once, and an enemy that dies easily
-/// appears near them every 40 ticks.
-fn play(
-    c: &Content,
-    w: &mut World,
-    from: u32,
-    to: u32,
-    seen: &mut Vec<String>,
-    t: &mut Tally,
-) -> Result<(), String> {
-    let carapace = c.enemy_index("carapace");
-    let cap = c.fields.cap;
-    for k in from..to {
-        let side = (k / 60) % 4;
-        let (mx, my) = [(1, 0), (0, 1), (-1, 0), (0, -1)][side as usize];
-        let flags = if k == 130 { DASH } else { 0 };
-        let input = Input {
-            mx,
-            my,
-            flags,
-            ..Input::default()
-        };
-        if k % 40 == 0 {
-            let near = w.players[0].pos.add(tool_core::geom::from_angle(
-                tool_core::fx::TURN * (k as i32 / 40) / 5,
-                px(140),
-            ));
-            let i = w.spawn_foe(c, carapace, near);
-            w.foes[i].hp = 20;
-            w.foes[i].max_hp = 20;
-        }
-        let p = &mut w.players[0];
-        p.invulnerable = 1_000;
-        p.offer = None;
-        p.pending = 0;
-        w.step(c, &[input]);
-        for s in w.shots.iter().filter(|s| s.seat == 0) {
-            if !seen.contains(&s.ability) {
-                seen.push(s.ability.clone());
-            }
-        }
-        for f in w.fields.iter().filter(|f| f.seat == 0) {
-            let id = format!("field:{}", f.kind.name());
-            if !seen.contains(&id) {
-                seen.push(id);
-            }
-        }
-        for e in w.effects.iter().filter(|e| e.seat == 0) {
-            if !seen.contains(&e.ability) {
-                seen.push(e.ability.clone());
-            }
-        }
-        t.most_shots = t.most_shots.max(w.shots.len());
-        t.most_effects = t.most_effects.max(w.effects.len());
-        t.most_echoes = t.most_echoes.max(w.pending.len());
-        if w.shots.len() > MAX_SHOTS
-            || w.effects.len() > MAX_EFFECTS
-            || w.pending.len() > MAX_ECHOES
-            || w.fields.len() > cap
-        {
-            return Err(format!(
-                "bounds: tick {k}: {} shots, {} effects, {} echoes, {} fields",
-                w.shots.len(),
-                w.effects.len(),
-                w.pending.len(),
-                w.fields.len()
-            ));
-        }
-        if let Some(f) = w.foes.iter().find(|f| f.hp > f.max_hp) {
-            return Err(format!("health: tick {k}: an enemy has {} of {}", f.hp, f.max_hp));
-        }
-    }
-    Ok(())
-}
-
-/// More than `World::sum`: the effects, echoes and fields count too.
-fn print(w: &World) -> Vec<i64> {
-    let mut v = vec![
-        w.sum() as i64,
-        w.effects.len() as i64,
-        w.pending.len() as i64,
-        w.fields.len() as i64,
-    ];
-    for e in &w.effects {
-        v.extend([e.pos.x as i64, e.pos.y as i64, e.radius as i64]);
-    }
-    for s in &w.shots {
-        v.extend([s.pos.x as i64, s.pos.y as i64]);
-    }
-    v
-}
-
-/// The recharge worked out from the data: the first payload before any
-/// trigger, at its level, with every part's load.
-fn expected_recharge(c: &Content, row: &[String], level: i32) -> Option<i32> {
-    let mut first = None;
-    for id in row {
-        if let Some(p) = c.part(id) {
-            if p.kind == PartKind::Trigger {
-                break;
-            }
-            continue;
-        }
-        let a = c.ability(id)?;
-        let lv = &a.levels[(level as usize - 1).min(a.levels.len() - 1)];
-        first = Some(ticks(lv.cooldown_ms));
-        break;
-    }
-    let load: i32 = row.iter().filter_map(|id| c.part(id)).map(|p| p.load_pct).sum();
-    first.map(|cd| (cd * (100 + load.max(0)) / 100).max(1))
-}
-
-/// The payloads that fire on the recharge: those before the first trigger.
-fn on_recharge(c: &Content, row: &[String]) -> Vec<String> {
-    let mut out = Vec::new();
-    for id in row {
-        match c.part(id) {
-            Some(p) if p.kind == PartKind::Trigger => break,
-            Some(_) => {}
-            None => out.push(id.clone()),
-        }
-    }
-    out
-}
-
-/// How many shots and effects of `id` the player has.
-fn made(w: &World, id: &str) -> usize {
-    w.shots.iter().filter(|s| s.seat == 0 && s.ability == id).count()
-        + w.effects
-            .iter()
-            .filter(|e| e.seat == 0 && e.ability == id)
-            .count()
-}
-
-/// The formation rule: on the first tick, a payload after a formation makes
-/// `copies` times what it makes without the formation.
-fn formation(c: &Content, row: &[String], level: i32) -> Result<(), String> {
-    let Some(i) = row.iter().position(|id| c.part(id).is_none()) else {
-        return Ok(());
-    };
-    if row[..i]
-        .iter()
-        .any(|id| c.part(id).map(|p| p.kind == PartKind::Trigger).unwrap_or(false))
-    {
-        return Ok(());
-    }
-    // the last formation before the payload is the one that counts
-    let Some(f) = row[..i]
-        .iter()
-        .rev()
-        .find_map(|id| c.part(id).filter(|p| p.kind == PartKind::Formation))
-    else {
-        return Ok(());
-    };
-    let bare: Vec<String> = row
-        .iter()
-        .enumerate()
-        .filter(|(k, id)| *k >= i || c.part(id).map(|p| p.kind != PartKind::Formation).unwrap_or(true))
-        .map(|(_, id)| id.clone())
-        .collect();
-    let mut a = scene(c, row, level, false);
-    a.step(c, &[Input::default()]);
-    let mut b = scene(c, &bare, level, false);
-    b.step(c, &[Input::default()]);
-    let (with, without) = (made(&a, &row[i]), made(&b, &row[i]));
-    if with != f.copies as usize * without {
-        return Err(format!(
-            "formation: {} makes {with} where {} copies of {without} were due",
-            f.id, f.copies
-        ));
-    }
-    Ok(())
-}
-
-/// What one rig did in the scene, and which rules it broke.
-#[derive(Default, Clone)]
-struct Played {
-    failures: Vec<String>,
-    notes: Vec<String>,
-    fired: i32,
-    /// Damage done to the six enemies that do not die.
-    dealt: i64,
-    kills: u32,
-    /// The payloads seen, and the fields left, in the order first seen.
-    payloads: Vec<String>,
-    fields: Vec<String>,
-    reactions: u32,
-    depth: u32,
-    /// A fingerprint of the world at the end.
-    print: u64,
-    most_shots: usize,
-    most_effects: usize,
-    most_echoes: usize,
-}
-
-fn fnv(h: u64, bytes: &[u8]) -> u64 {
-    let mut h = h;
-    for b in bytes {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    h
-}
-
-const FNV: u64 = 0xcbf2_9ce4_8422_2325;
-
-/// Plays one rig and judges it against every rule.
-fn judge(c: &Content, row: &[String], level: i32, deep: bool) -> Played {
-    let run = catch_unwind(AssertUnwindSafe(
-        || -> Result<(Vec<i64>, World, Vec<String>, Tally), String> {
-            let mut lt = Tally::default();
-            formation(c, row, level)?;
-            let mut w = scene(c, row, level, false);
-            let mut seen = Vec::new();
-            play(c, &mut w, 0, SCENE_TICKS / 2, &mut seen, &mut lt)?;
-            let half = w.clone();
-            play(c, &mut w, SCENE_TICKS / 2, SCENE_TICKS, &mut seen, &mut lt)?;
-            let end = print(&w);
-            if deep {
-                let mut again = half;
-                let mut s2 = Vec::new();
-                play(
-                    c,
-                    &mut again,
-                    SCENE_TICKS / 2,
-                    SCENE_TICKS,
-                    &mut s2,
-                    &mut Tally::default(),
-                )?;
-                if print(&again) != end {
-                    return Err("rollback: a copy taken halfway ends in a different world".into());
-                }
-                let mut g = scene(c, row, level, true);
-                play(c, &mut g, 0, SCENE_TICKS, &mut Vec::new(), &mut Tally::default())?;
-                if print(&g) != end {
-                    return Err("gap: an empty socket in the middle changes the world".into());
-                }
-            }
-            Ok((end, w, seen, lt))
-        },
-    ));
-    let mut out = Played::default();
-    let (end, w, seen) = match run {
-        Err(e) => {
-            let why = e
-                .downcast_ref::<String>()
-                .cloned()
-                .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                .unwrap_or_default();
-            out.failures.push(format!("panic: {why}"));
-            return out;
-        }
-        Ok(Err(why)) => {
-            out.failures.push(why);
-            return out;
-        }
-        Ok(Ok((end, w, seen, lt))) => {
-            out.most_shots = lt.most_shots;
-            out.most_effects = lt.most_effects;
-            out.most_echoes = lt.most_echoes;
-            (end, w, seen)
-        }
-    };
-    let p = &w.players[0];
-    let fired = p.rigs[0].fired as i32;
-    if let Some(cd) = expected_recharge(c, row, level) {
-        let most = (SCENE_TICKS as i32 + cd - 1) / cd;
-        if fired != most {
-            out.failures.push(format!(
-                "recharge: fired {fired} times; a recharge of {cd} ticks fires {most}"
-            ));
-        }
-    } else if fired > 0 {
-        out.failures.push(format!(
-            "recharge: fired {fired} times with no payload before its first trigger"
-        ));
-    }
-    if p.record.deepest_trigger > 3 {
-        out.failures.push(format!("depth: {}", p.record.deepest_trigger));
-    }
-    if let Some(s) = seen
-        .iter()
-        .find(|s| *s != "rune" && !s.starts_with("field:") && !row.contains(s))
-    {
-        out.failures.push(format!("stray: a {s} that is not in the rig"));
-    }
-    // the field rule: the last field modifier before the first payload
-    // leaves its field, or reacted with another. A lone tether in a solo
-    // scene joins nothing and so cuts nothing.
-    let first = on_recharge(c, row);
-    let lands = |id: &str| c.ability(id).map(|a| a.kind != Kind::Tether).unwrap_or(false);
-    if let Some(at) = first
-        .first()
-        .filter(|p| lands(p))
-        .and_then(|p| row.iter().position(|id| id == p))
-    {
-        if let Some(kind) = row[..at]
-            .iter()
-            .rev()
-            .find_map(|id| c.part(id).filter(|q| !q.field.is_empty()))
-        {
-            let want = format!("field:{}", kind.field);
-            // a mine that has not gone off has not landed yet
-            let waiting = w
-                .effects
-                .iter()
-                .any(|e| e.seat == 0 && e.ability == row[at] && e.kind == EffectKind::Bomb);
-            if seen.contains(&row[at])
-                && !waiting
-                && !seen.contains(&want)
-                && !seen.iter().any(|s| s == "field:steam")
-                && p.record.reactions == 0
-            {
-                let why = format!("field: {} left no {} field", row[at], kind.field);
-                // out of a wormhole a payload flies at the player and may hit
-                // nothing, and nothing hit is nothing landed on
-                if row[..at].iter().any(|id| id == "wormhole") {
-                    out.notes.push(why);
-                } else {
-                    out.failures.push(why);
-                }
-            }
-        }
-    }
-    for id in first {
-        if !seen.contains(&id) {
-            out.notes.push(format!("never fired: {id}"));
-        }
-    }
-    out.fired = fired;
-    out.dealt = w
-        .foes
-        .iter()
-        .filter(|f| f.max_hp == 100_000)
-        .map(|f| (f.max_hp - f.hp) as i64)
-        .sum();
-    out.kills = p.record.kills;
-    out.payloads = seen
-        .iter()
-        .filter(|s| !s.starts_with("field:"))
-        .cloned()
-        .collect();
-    out.fields = seen
-        .iter()
-        .filter_map(|s| s.strip_prefix("field:").map(|f| f.to_string()))
-        .collect();
-    out.reactions = p.record.reactions;
-    out.depth = p.record.deepest_trigger;
-    out.print = end.iter().fold(FNV, |h, v| fnv(h, &v.to_le_bytes()));
     out
 }
 
@@ -658,6 +203,18 @@ fn every_short_rig_and_a_sample_of_long_ones_keep_every_rule() {
     assert_eq!(short, 29 + 2378, "the space counted in MEASUREMENTS.md");
     assert_eq!(space(&t, 2), 2378);
     assert_eq!(space(&t, 4), 8_772_732);
+    // the shuffle for five tokens visits a number only once: the first
+    // 100,000 places hold 100,000 different numbers, spread over the space
+    let firsts: std::collections::BTreeSet<u64> = (0..100_000).map(|s| shuffled(&t, 5, s)).collect();
+    assert_eq!(firsts.len(), 100_000);
+    assert!(
+        firsts
+            .iter()
+            .filter(|n| **n < rows(&t, 5) / 2)
+            .count()
+            .abs_diff(50_000)
+            < 1_000
+    );
     assert!(
         all.failures.is_empty(),
         "{} rigs broke a rule:\n{}",
@@ -737,10 +294,6 @@ fn sweep() {
 
 // ---- the logbook (T18) -------------------------------------------------------
 //
-// Everything above this line is the scene and the rules; its text is part of
-// every log line's key, so changing it makes every line stale. Everything
-// below is bookkeeping and may change freely.
-//
 // The full log stays on this computer, in `rig-log/` (not in git): one line
 // for every rig played, in files of 4,096 rig numbers. The repository keeps
 // a summary in `tests/rig-log/`: one line for each file, every rig that
@@ -750,7 +303,8 @@ fn sweep() {
 //
 // RIG_BUDGET_S (seconds, default 120), RIG_LENGTHS (default 1,2,3,4),
 // RIG_LEVELS (default 1). Each run plays only rigs whose line is missing or
-// stale, shortest rigs first, until the budget is spent.
+// stale, shortest rigs first, until the budget is spent. Five and six
+// tokens go in a fixed shuffled order (`shuffled`).
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -769,7 +323,6 @@ const RULE_FILES: &[&str] = &[
     "crates/core/src/content.rs",
     "crates/core/src/meta.rs",
 ];
-const MARK: &str = "// ---- the logbook (T18)";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -789,8 +342,10 @@ fn keys(t: &Tokens) -> Keys {
     for f in RULE_FILES {
         code = fnv(code, &std::fs::read(r.join(f)).unwrap());
     }
-    let me = std::fs::read_to_string(r.join("crates/core/tests/rig_space.rs")).unwrap();
-    code = fnv(code, &me.as_bytes()[..me.find(MARK).unwrap()]);
+    code = fnv(
+        code,
+        &std::fs::read(r.join("crates/core/tests/support/rig_rules.rs")).unwrap(),
+    );
     code = fnv(code, t.all.join(",").as_bytes());
     let text = std::fs::read_to_string(r.join("data/content.json")).unwrap();
     let mut data: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -816,6 +371,25 @@ fn rig_key(k: &Keys, level: i32, row: &[usize]) -> u64 {
         h = fnv(h, &k.token[*i].to_le_bytes());
     }
     h
+}
+
+/// The rig number logged in place `slot`. Rigs of up to four tokens are
+/// logged in number order, all of them. Five and six are too many to
+/// finish, so their places are a fixed shuffle of the numbers: a run that
+/// stops early has logged an even sample, and later runs fill in the rest.
+/// The shuffle is `slot * a mod 56^len`, with `a` near 0.618 of the space
+/// and sharing no factor with it (56 is 2^3 x 7), so it visits every number
+/// once.
+fn shuffled(t: &Tokens, len: usize, slot: u64) -> u64 {
+    if len <= 4 {
+        return slot;
+    }
+    let n = rows(t, len);
+    let mut a = (n as u128 * 618 / 1000) as u64;
+    while a.is_multiple_of(2) || a.is_multiple_of(7) {
+        a += 1;
+    }
+    ((slot as u128 * a as u128) % n as u128) as u64
 }
 
 /// One line of the log.
@@ -1081,6 +655,7 @@ fn logbook() {
                 }
                 let span = b * BLOCK..((b + 1) * BLOCK).min(rows(&t, len));
                 let want: Vec<(u64, Vec<usize>, u64)> = span
+                    .map(|slot| shuffled(&t, len, slot))
                     .filter_map(|n| rig_at(&t, len, n).map(|r| (n, r)))
                     .map(|(n, r)| {
                         let key = rig_key(&k, level, &r);
@@ -1192,17 +767,44 @@ fn write_summary(
 ) {
     let mut s = String::from(
         "# One line for each file of 4,096 rig numbers in the local log (rig-log/).\n\
+         # Five and six tokens are summed over 256 blocks a line.\n\
          # length\tlevel\tblock\trigs\tfailed\tnoted\tbehaviour\tkey\tlast tested\n",
     );
     let mut by_len: BTreeMap<(usize, i32), (u64, u64)> = BTreeMap::new();
+    // five and six tokens: one line for each 256 blocks, so the summary
+    // stays small however much of them is logged
+    let mut chapters: BTreeMap<(usize, i32, u64), Block> = BTreeMap::new();
     for ((len, level, b), e) in index {
-        s += &format!(
-            "{len}\t{level}\t{b}\t{}\t{}\t{}\t{:016x}\t{:016x}\t{}\n",
-            e.rigs, e.failed, e.noted, e.print, e.key, e.tested
-        );
+        if *len >= 5 {
+            let c = chapters.entry((*len, *level, b / 256)).or_default();
+            c.rigs += e.rigs;
+            c.failed += e.failed;
+            c.noted += e.noted;
+            c.print = fnv(c.print.max(1), &e.print.to_le_bytes());
+            c.key = fnv(c.key.max(1), &e.key.to_le_bytes());
+            c.tested = c.tested.clone().max(e.tested.clone());
+        } else {
+            s += &format!(
+                "{len}\t{level}\t{b}\t{}\t{}\t{}\t{:016x}\t{:016x}\t{}\n",
+                e.rigs, e.failed, e.noted, e.print, e.key, e.tested
+            );
+        }
         let x = by_len.entry((*len, *level)).or_default();
         x.0 += e.rigs;
         x.1 += e.failed;
+    }
+    for ((len, level, ch), e) in &chapters {
+        s += &format!(
+            "{len}\t{level}\tblocks {}-{}\t{}\t{}\t{}\t{:016x}\t{:016x}\t{}\n",
+            ch * 256,
+            ch * 256 + 255,
+            e.rigs,
+            e.failed,
+            e.noted,
+            e.print,
+            e.key,
+            e.tested
+        );
     }
     std::fs::write(repo.join("summary.tsv"), s).unwrap();
     std::fs::write(
@@ -1215,7 +817,14 @@ fn write_summary(
     });
     let cover: Vec<String> = by_len
         .iter()
-        .map(|((len, level), (n, _))| format!("L{len} level {level}: {n} of {}", space(t, *len)))
+        .map(|((len, level), (n, _))| {
+            let all = space(t, *len);
+            format!(
+                "L{len} level {level}: {n} of {all} ({}.{:02}%)",
+                n * 100 / all,
+                n * 10_000 / all % 100
+            )
+        })
         .collect();
     runs += &format!(
         "{tested}\t{played}\t{secs:.0}\t{}\t{}\n",
