@@ -37,6 +37,7 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | `./scripts/check.sh` | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 14 Oct 2026 |
 | `./scripts/check.sh`, after the playtest round | BUILDER CHECK PASSED (Chromium, Firefox, WebKit), 14 Oct 2026 |
 | `python3 tests/browser/online.py chromium firefox webkit`, after the playtest round | ONLINE CHECK PASSED |
+| Live check after publishing be0f02d (`BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py`) | PASSED in all three engines |
 | `BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py` | PASSED in all three engines against the live site |
 | Website: `make check`, `make packet`, `make gate`, then `make gate-live` after publishing | all passed; the listing is at /projects/galactic-survivors/ |
 | `./scripts/count-tests.sh` | 132 passed, 0 failed, 1 ignored (the probe), after the playtest round |
