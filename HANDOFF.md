@@ -52,6 +52,8 @@ The save format is now version 2. A version 1 file still loads: its modules keep
 | Live check after publishing be0f02d (`BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py`) | PASSED in all three engines |
 | `BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py` | PASSED in all three engines against the live site |
 | Website: `make check`, `make packet`, `make gate`, then `make gate-live` after publishing | all passed; the listing is at /projects/galactic-survivors/ |
+| Website listing after round 3 (website commit f15315c, built from a clean worktree): `make check`, `make packet`, the gate, publish, then the gate against the live site | all passed |
+| Live check after publishing 5074143 (`BUILDER_ORIGIN=https://sgilson7.github.io/galactic-survivors tests/browser/check.py`) | PASSED in all three engines |
 | `./scripts/count-tests.sh` | 132 passed, 0 failed, 1 ignored (the probe), after the playtest round |
 | `python3 scripts/break_tests.py` | 45 of 45 planted defects caught, after the playtest round |
 | `python3 tests/browser/online.py chromium firefox webkit` | passed: two pages meet by pasted codes and play in step |
@@ -96,7 +98,6 @@ From the first build:
 
 - Glossary hover hints (D15) are not drawn in the menus (R1.14). The codex now covers abilities, passives and evolutions.
 - The weakest new pictures are listed in R2.15.
-- The website listing still says "all twenty achievements … each adds a little experience". Fixing it needs a website deploy, which needs the person's go-ahead.
 - Damage numbers are not drawn; the setting is hidden (R1.22).
 - The relays in `web/net/config.js` were last confirmed in October 2026 by another project (R1.19).
 - No sound.

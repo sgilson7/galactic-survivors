@@ -57,3 +57,5 @@ The agent decided: rigs of sockets and parts, read left to right, never shuffled
 > 6. update and redeploy website listing ,keep prose succinct and written with astra v2 style guide found in another directory
 
 The agent may update `content/projects/galactic-survivors.md` on sgilson7.github.io and redeploy the website for it.
+
+The listing was rewritten and the website redeployed (website commit f15315c). The website's working copy held another session's uncommitted edit to `content/projects/packet-alley.md`, so the site was built and published from a clean worktree at its HEAD, with its one ignored published file (the CSC 484 slides) copied in, and `main` was fast-forwarded. The game was republished from 5074143 under the brief's Pages grant.
