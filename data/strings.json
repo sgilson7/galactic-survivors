@@ -497,7 +497,7 @@
     "field_frost": "Slows enemies standing in it. Fire meeting frost turns both to steam, which slows harder.",
     "field_charge": "Zaps the nearest enemy in it now and then. A charge meeting a slick or frost strikes everything in that field at once.",
     "field_slick": "Slows enemies a little. Fire meeting a slick flares, then the slick burns.",
-    "rune_circle": "Walk a loop with no sharp corners: {n} armour for each one you hold.",
+    "rune_circle": "Walk a loop with no sharp corners: {n} armor for each one you hold.",
     "rune_triangle": "Walk a loop with three sharp corners: {n}% more damage for each one you hold.",
     "rune_square": "Walk a loop with four sharp corners: {n}% more area for each one you hold."
   },

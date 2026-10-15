@@ -148,7 +148,6 @@ From the first build:
 ## Rows for the person
 
 - R4.18: the lobby between two computers, by room code and by link.
-- R4.24: "armour" or "armor".
 - R4.20: how to bound the effects a rig like Ring, Swarm Battery, On Hit, Twin, Sweep Cannon can pile up.
 - R3.9: co-op between two homes, with the new readout.
 - R3.17: the numbers for the new content were tuned against a bot that never builds a rig.
