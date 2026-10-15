@@ -9,5 +9,6 @@
   "Digit2": "card2", "Numpad2": "card2",
   "Digit3": "card3", "Numpad3": "card3",
   "KeyR": "reroll",
-  "Escape": "pause", "KeyP": "pause"
+  "Escape": "pause", "KeyP": "pause",
+  "KeyI": "inspect", "KeyB": "inspect"
 }

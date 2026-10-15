@@ -166,6 +166,25 @@ function item(it) {
   const box = make("article", undefined, "item");
   box.id = `item-${it.id}`;
   if (it.tone) box.dataset.tone = it.tone;
+  if (it.selected) box.dataset.selected = "true";
+  if (it.at) {
+    box.style.gridColumn = String(it.at[0] + 1);
+    box.style.gridRow = String(it.at[1] + 1);
+  }
+  if (it.click) {
+    // a tile: the whole item is one button
+    box.tabIndex = 0;
+    box.setAttribute("role", "button");
+    box.setAttribute("aria-label", it.click.label);
+    box.addEventListener("click", () => act(it.click.name, it.click.value));
+    box.addEventListener("keydown", (e) => {
+      if (e.code === "Enter" || e.code === "Space") {
+        e.preventDefault();
+        act(it.click.name, it.click.value);
+      }
+    });
+  }
+  if (it.badge) box.append(make("span", it.badge, "badge"));
   if (it.icon) {
     const img = make("img");
     img.src = `art/${it.icon}.png`;

@@ -228,6 +228,12 @@ fn an_evolution_is_offered_once_possible_and_needs_its_partner() {
         cd: 0,
     });
     let offer = w.level_offer(&c, 0);
+    assert!(
+        offer.cards.iter().all(|card| card.kind != CardKind::Evolve),
+        "the partner is below its level (split_feed tops out at 2, under the rule's 3)"
+    );
+    w.players[0].passives[0].level = 2;
+    let offer = w.level_offer(&c, 0);
     assert_eq!(offer.cards[0].kind, CardKind::Evolve);
     assert_eq!(offer.cards[0].id, "swarm_battery");
     w.players[0].offer = Some(offer);
@@ -239,7 +245,7 @@ fn an_evolution_is_offered_once_possible_and_needs_its_partner() {
 fn a_locked_evolution_is_not_offered() {
     let c = shipped();
     let mut l = load(&c, "pathfinder");
-    assert_eq!(l.locked, vec!["storm_lattice".to_string()]);
+    assert!(l.locked.contains(&"storm_lattice".to_string()));
     let mut w = World::new(&c, 1, std::slice::from_ref(&l));
     w.players[0].abilities.push(crate::world::Slot {
         id: "chain_arc".into(),
@@ -248,7 +254,7 @@ fn a_locked_evolution_is_not_offered() {
     });
     w.players[0].passives.push(crate::world::Slot {
         id: "power_cell".into(),
-        level: 1,
+        level: 3,
         cd: 0,
     });
     assert_eq!(w.evolvable(&c, 0), None);
@@ -374,12 +380,89 @@ fn the_run_is_lost_when_every_player_is_down_and_won_when_the_final_boss_falls()
 fn experience_is_shared_and_both_players_level_together() {
     let c = quiet();
     let mut w = World::new(&c, 2, &[load(&c, "pathfinder"), load(&c, "vector")]);
-    // level 1 needs xp_first (5)
+    // level 1 needs xp_first (6 in content.json)
     w.gain_xp(&c, 5);
+    assert_eq!(w.level, 1);
+    w.gain_xp(&c, 1);
     assert_eq!(w.level, 2);
     assert_eq!(w.players[0].pending, 1);
     assert_eq!(w.players[1].pending, 1);
     w.step(&c, &[Input::default(), Input::default()]);
     assert!(w.players[0].offer.is_some() && w.players[1].offer.is_some());
     assert!(w.waiting(), "the field waits while a card is open");
+}
+
+#[test]
+fn a_locked_ability_is_never_offered_until_unlocked() {
+    let c = shipped();
+    let mut w = solo(&c, "pathfinder");
+    let pool: Vec<String> = w.card_pool(&c, 0).into_iter().map(|k| k.id).collect();
+    for id in ["mortar", "missiles", "cryo_burst", "sentry"] {
+        assert!(!pool.contains(&id.to_string()), "{id} is locked");
+    }
+    assert!(pool.contains(&"chain_arc".to_string()));
+    w.players[0].load.locked.retain(|x| x != "mortar");
+    let pool: Vec<String> = w.card_pool(&c, 0).into_iter().map(|k| k.id).collect();
+    assert!(pool.contains(&"mortar".to_string()));
+}
+
+#[test]
+fn a_run_records_kills_by_enemy_and_the_first_hit() {
+    let c = shipped();
+    let mut w = solo(&c, "pathfinder");
+    let kind = c.enemy_index("skitter");
+    let i = w.spawn_foe(&c, kind, V::new(px(300), 0));
+    w.hurt_foe(&c, i, 10_000, 0, "seeker_rifle", V::ZERO);
+    assert_eq!(w.players[0].record.kills_of.get("skitter"), Some(&1));
+    assert_eq!(w.players[0].record.first_hit, 0);
+    for _ in 0..30 {
+        w.step(&c, &[Input::default()]);
+    }
+    w.hurt_player(&c, 0, 5);
+    let at = w.players[0].record.first_hit;
+    assert!(at > 0);
+    for _ in 0..30 {
+        w.step(&c, &[Input::default()]);
+    }
+    w.players[0].invulnerable = 0;
+    w.hurt_player(&c, 0, 5);
+    assert!(w.tick as i32 > at);
+    assert_eq!(w.players[0].record.first_hit, at, "only the first hit counts");
+}
+
+#[test]
+fn a_dash_is_counted() {
+    let c = shipped();
+    let mut w = solo(&c, "vector");
+    let dash = Input {
+        mx: 127,
+        flags: crate::world::DASH,
+        ..Input::default()
+    };
+    w.step(&c, &[dash]);
+    assert_eq!(w.players[0].record.dashes, 1);
+    // still recharging: no second dash
+    w.step(&c, &[dash]);
+    assert_eq!(w.players[0].record.dashes, 1);
+}
+
+#[test]
+fn an_evolution_waits_for_its_partner_to_reach_level_three() {
+    let c = shipped();
+    let mut w = solo(&c, "pathfinder");
+    w.players[0].load.locked.clear();
+    w.players[0].abilities.push(crate::world::Slot {
+        id: "chain_arc".into(),
+        level: c.run.max_level,
+        cd: 0,
+    });
+    // power_cell has five levels, so the rule's level 3 applies
+    w.players[0].passives.push(crate::world::Slot {
+        id: "power_cell".into(),
+        level: 2,
+        cd: 0,
+    });
+    assert_eq!(w.evolvable(&c, 0), None);
+    w.players[0].passives[0].level = 3;
+    assert_eq!(w.evolvable(&c, 0), Some(1));
 }

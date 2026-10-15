@@ -23,8 +23,8 @@
   {
     "name": "an evolution needs no partner",
     "file": "crates/core/src/arsenal.rs",
-    "find": "&& p.passives.iter().any(|q| q.id == def.evolves_with)",
-    "replace": "",
+    "find": "q.id == def.evolves_with && q.level >= content.partner_level(&def.evolves_with)",
+    "replace": "q.level >= 0",
     "test": "an_evolution_is_offered_once_possible_and_needs_its_partner"
   },
   {
@@ -44,15 +44,15 @@
   {
     "name": "another character's ability is offered",
     "file": "crates/core/src/offer.rs",
-    "find": "if !owned && allowed && !p.banished.contains(&a.id) {",
-    "replace": "if !owned && !p.banished.contains(&a.id) {",
+    "find": "if !owned && allowed && !p.banished.contains(&a.id) && !p.load.locked.contains(&a.id) {",
+    "replace": "if !owned && !p.banished.contains(&a.id) && !p.load.locked.contains(&a.id) {",
     "test": "offers_hold_only_what_the_character_may_take_and_never_regeneration"
   },
   {
     "name": "a banished ability comes back",
     "file": "crates/core/src/offer.rs",
-    "find": "if !owned && allowed && !p.banished.contains(&a.id) {",
-    "replace": "if !owned && allowed {",
+    "find": "if !owned && allowed && !p.banished.contains(&a.id) && !p.load.locked.contains(&a.id) {",
+    "replace": "if !owned && allowed && !p.load.locked.contains(&a.id) {",
     "test": "a_banished_card_is_never_offered_again"
   },
   {
@@ -65,16 +65,16 @@
   {
     "name": "an achievement pays twice",
     "file": "crates/core/src/meta.rs",
-    "find": "if self.claimed.contains(&a.id) || self.stat(&a.stat) < a.target {",
-    "replace": "if self.stat(&a.stat) < a.target {",
-    "test": "achievements_are_listed_before_they_are_earned_and_pay_once"
+    "find": "if self.claimed.contains(&a.id) || !self.met(a) {",
+    "replace": "if !self.met(a) {",
+    "test": "a_hidden_achievement_is_earned_all_the_same"
   },
   {
-    "name": "achievements give no XP",
+    "name": "achievements add XP again",
     "file": "crates/core/src/meta.rs",
-    "find": "stats.xp_pct += content.achievement_xp_pct * self.claimed.len() as i32;",
-    "replace": "",
-    "test": "each_claimed_achievement_adds_one_percent_xp"
+    "find": "        let locked = content\n            .abilities",
+    "replace": "        stats.xp_pct += self.claimed.len() as i32;\n        let locked = content\n            .abilities",
+    "test": "achievements_no_longer_add_xp"
   },
   {
     "name": "the raid can come early",
@@ -145,5 +145,173 @@
     "find": "other => return Err(format!(\"Unknown action \\\"{other}\\\".\")),",
     "replace": "_ => {}",
     "test": "an_unknown_action_is_an_error"
+  },
+  {
+    "name": "every achievement shows on the grid",
+    "file": "crates/core/src/meta.rs",
+    "find": "if a.start || self.claimed.contains(&a.id) {",
+    "replace": "if true {",
+    "test": "the_grid_shows_starting_achievements_and_the_neighbours_of_earned_ones"
+  },
+  {
+    "name": "a hidden tile names its achievement",
+    "file": "crates/core/src/view.rs",
+    "find": "            title: if seen {\n                t.name(&a.id)",
+    "replace": "            title: if true {\n                t.name(&a.id)",
+    "test": "hidden_achievements_show_as_question_marks_and_name_nothing"
+  },
+  {
+    "name": "cells two apart count as neighbours",
+    "file": "crates/core/src/meta.rs",
+    "find": "d == 1 && self.claimed.contains(&b.id)",
+    "replace": "d <= 2 && self.claimed.contains(&b.id)",
+    "test": "the_grid_shows_starting_achievements_and_the_neighbours_of_earned_ones"
+  },
+  {
+    "name": "a hidden achievement cannot be earned",
+    "file": "crates/core/src/meta.rs",
+    "find": "if self.claimed.contains(&a.id) || !self.met(a) {",
+    "replace": "if self.claimed.contains(&a.id) || !self.met(a) || !self.visible(content, &a.id) {",
+    "test": "a_hidden_achievement_is_earned_all_the_same"
+  },
+  {
+    "name": "a fastest time counts as a high score",
+    "file": "crates/core/src/meta.rs",
+    "find": "v > 0 && v <= a.target",
+    "replace": "v >= a.target",
+    "test": "a_fastest_time_achievement_needs_a_time_at_or_under_its_target"
+  },
+  {
+    "name": "outfitter caps are ignored",
+    "file": "crates/core/src/meta.rs",
+    "find": "if rank >= self.rank_cap(content, id) {",
+    "replace": "if rank < 0 {",
+    "test": "outfitter_ranks_stop_at_the_cap_until_an_achievement_opens_more"
+  },
+  {
+    "name": "locked gear slots are open",
+    "file": "crates/core/src/meta.rs",
+    "find": "(k < content.gear.open_slots || !self.locked(content, \"slot\", &k.to_string()))",
+    "replace": "true",
+    "test": "gear_goes_only_in_open_slots_of_its_kind_and_counts_per_character"
+  },
+  {
+    "name": "gear fits any slot",
+    "file": "crates/core/src/meta.rs",
+    "find": "if content.gear.slots[k] != def.slot {",
+    "replace": "if k > content.gear.slots.len() {",
+    "test": "gear_goes_only_in_open_slots_of_its_kind_and_counts_per_character"
+  },
+  {
+    "name": "a merge takes any rank",
+    "file": "crates/core/src/meta.rs",
+    "find": ".filter(|m| m.uid != uid && m.id == me.id && m.rank == me.rank)",
+    "replace": ".filter(|m| m.uid != uid && m.id == me.id)",
+    "test": "two_copies_at_one_rank_merge_into_one_a_rank_higher"
+  },
+  {
+    "name": "a merge passes the highest rank",
+    "file": "crates/core/src/meta.rs",
+    "find": "        if me.rank >= content.cache.max_rank {\n            return Err(\"gear.max_rank\");",
+    "replace": "        if me.rank > content.cache.max_rank {\n            return Err(\"gear.max_rank\");",
+    "test": "a_piece_at_the_highest_rank_does_not_merge"
+  },
+  {
+    "name": "merge all loses the worn piece",
+    "file": "crates/core/src/meta.rs",
+    "find": "order.sort_by_key(|m| (m.rank, self.worn_by(m.uid).is_empty(), m.uid));",
+    "replace": "order.sort_by_key(|m| (m.rank, m.uid));",
+    "test": "merge_all_merges_upward_and_keeps_the_worn_piece"
+  },
+  {
+    "name": "worn gear can be scrapped",
+    "file": "crates/core/src/meta.rs",
+    "find": "        if !self.worn_by(uid).is_empty() {\n            return Err(\"gear.worn\");\n        }",
+    "replace": "",
+    "test": "scrapping_pays_by_rarity_and_rank_and_spares_worn_gear"
+  },
+  {
+    "name": "scrap ignores rank",
+    "file": "crates/core/src/meta.rs",
+    "find": "let gold = base << (me.rank - 1).clamp(0, 16);",
+    "replace": "let gold = base;",
+    "test": "scrapping_pays_by_rarity_and_rank_and_spares_worn_gear"
+  },
+  {
+    "name": "version 1 ranks are not refunded",
+    "file": "crates/core/src/meta.rs",
+    "find": "save.gold += Save::rank_cost(content, id, r).unwrap_or(0);",
+    "replace": "save.gold += 0;",
+    "test": "a_version_1_save_is_brought_up_to_date"
+  },
+  {
+    "name": "a locked ability is offered",
+    "file": "crates/core/src/offer.rs",
+    "find": "&& !p.load.locked.contains(&a.id) {",
+    "replace": "{",
+    "test": "a_locked_ability_is_never_offered_until_unlocked"
+  },
+  {
+    "name": "abilities are never locked",
+    "file": "crates/core/src/meta.rs",
+    "find": ".filter(|a| self.locked(content, \"ability\", &a.id))",
+    "replace": ".filter(|_| false)",
+    "test": "locked_abilities_and_evolutions_stay_out_until_their_achievement"
+  },
+  {
+    "name": "the partner level is ignored",
+    "file": "crates/core/src/content.rs",
+    "find": "self.run.evolve_partner_level.min(max).max(1)",
+    "replace": "1",
+    "test": "an_evolution_waits_for_its_partner_to_reach_level_three"
+  },
+  {
+    "name": "every hit is the first",
+    "file": "crates/core/src/world.rs",
+    "find": "        if p.record.first_hit == 0 {\n            p.record.first_hit",
+    "replace": "        if p.record.first_hit >= 0 {\n            p.record.first_hit",
+    "test": "a_run_records_kills_by_enemy_and_the_first_hit"
+  },
+  {
+    "name": "kills by enemy are not kept",
+    "file": "crates/core/src/world.rs",
+    "find": "*rec.kills_of.entry(e.id.clone()).or_insert(0) += 1;",
+    "replace": "",
+    "test": "a_run_records_kills_by_enemy_and_the_first_hit"
+  },
+  {
+    "name": "dashes are not counted",
+    "file": "crates/core/src/world.rs",
+    "find": "p.record.dashes += 1;",
+    "replace": "",
+    "test": "a_dash_is_counted"
+  },
+  {
+    "name": "the walk stands still",
+    "file": "crates/core/src/render.rs",
+    "find": "(w.tick / step) % 4",
+    "replace": "0",
+    "test": "a_moving_player_cycles_four_walk_frames_and_a_still_one_stands"
+  },
+  {
+    "name": "everyone is told to dash",
+    "file": "crates/core/src/render.rs",
+    "find": "if ch.trait_ == \"dash\" && me.alive {",
+    "replace": "if me.alive {",
+    "test": "vector_is_reminded_to_dash_and_pathfinder_is_not"
+  },
+  {
+    "name": "the build pauses co-op",
+    "file": "crates/core/src/game.rs",
+    "find": "        if self.coop_running() {\n            self.inspect = !self.inspect;",
+    "replace": "        if false {\n            self.inspect = !self.inspect;",
+    "test": "the_build_pauses_a_solo_run_but_not_a_co_op_one"
+  },
+  {
+    "name": "the build never says ready",
+    "file": "crates/core/src/view.rs",
+    "find": "    if w.evolvable(c, seat) == Some(k) {\n        return t.fill(\"recipe.ready\"",
+    "replace": "    if w.evolvable(c, seat) == Some(99) {\n        return t.fill(\"recipe.ready\"",
+    "test": "the_build_says_when_an_ability_is_ready_to_evolve"
   }
 ]

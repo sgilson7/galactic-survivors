@@ -98,11 +98,53 @@ fn pick(w: &World, seat: usize) -> u8 {
             return k as u8 + 1;
         }
     }
+    // a planning player keeps passive slots free for the partner
+    use tool_core::world::CardKind;
+    for (k, card) in offer.cards.iter().enumerate() {
+        if matches!(
+            card.kind,
+            CardKind::NewAbility | CardKind::AbilityUp | CardKind::PassiveUp
+        ) {
+            return k as u8 + 1;
+        }
+    }
     1
 }
 
+/// A save with every outfitter rank bought and rank 3 gear in every slot:
+/// the far end of what permanent progress can give.
+fn veteran(c: &Content) -> Save {
+    let mut s = Save::new(c, 1);
+    s.claimed = c.achievements.iter().map(|a| a.id.clone()).collect();
+    for item in &c.shop {
+        s.ranks.insert(item.id.clone(), item.ranks);
+    }
+    let picks = ["kinetic_core", "plating_mod", "magnet_mod", "spare_reroll"];
+    for ch in ["pathfinder", "breaker", "vector"] {
+        let mut slots = Vec::new();
+        for id in picks {
+            s.modules.push(tool_core::meta::Piece {
+                uid: s.next_uid,
+                id: id.into(),
+                rank: 3,
+            });
+            slots.push(s.next_uid);
+            s.next_uid += 1;
+        }
+        s.equipped.insert(ch.into(), slots);
+    }
+    s
+}
+
+static mut VETERAN: bool = false;
+
 fn play(c: &Content, character: &str, seed: u64, coop: bool) -> World {
-    let save = Save::new(c, 1);
+    // SAFETY: the probe runs on one thread
+    let save = if unsafe { VETERAN } {
+        veteran(c)
+    } else {
+        Save::new(c, 1)
+    };
     let mut loads = vec![save.loadout(c, character)];
     if coop {
         loads.push(save.loadout(c, character));
@@ -168,15 +210,36 @@ fn probe_whole_runs() {
                 w.step(&c, &[input]);
             }
             println!(
-                "focused {ch} seed {seed}: evolved {:?} at {}s, level {}, {:?}",
+                "focused {ch} seed {seed}: evolved {:?} at {}s, level {}, {:?}, held {:?}",
                 w.players[0].record.evolved,
                 w.seconds(),
                 w.level,
-                w.phase
+                w.phase,
+                w.players[0]
+                    .abilities
+                    .iter()
+                    .chain(w.players[0].passives.iter())
+                    .map(|s| format!("{}:{}", s.id, s.level))
+                    .collect::<Vec<_>>()
             );
         }
     }
     unsafe { FOCUS = false };
+    unsafe { VETERAN = true };
+    for ch in ["pathfinder", "breaker", "vector"] {
+        for seed in [1u64, 2] {
+            let w = play(&c, ch, seed, false);
+            let p = &w.players[0];
+            println!(
+                "veteran {ch} seed {seed}: end {:?} at {}s, level {}, evolved {:?}",
+                w.phase,
+                w.seconds(),
+                w.level,
+                p.record.evolved
+            );
+        }
+    }
+    unsafe { VETERAN = false };
     println!("co-op pathfinder");
     let w = play(&c, "pathfinder", 3, true);
     println!("  end {:?} at {}s, level {}", w.phase, w.seconds(), w.level);

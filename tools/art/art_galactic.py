@@ -54,92 +54,140 @@ def leg(fig, x, top, foot_x, foot_y, fill, w=0.17, boot="gunmetal"):
     fig.ellipse(foot_x + 0.04, foot_y, w * 0.85, w * 0.5, boot)
 
 
-def draw_pathfinder(fig):
+GROUND = -0.8
+WALK_FRAMES = 4
+
+
+def gait(phase, feet, spread, lift=0.09, bob=0.035):
+    """Body lift and the (far, near) foot points for one walk frame.
+
+    phase None is the idle stance: feet where the idle picture has them.
+    Frames 0 and 2 are contact poses: feet apart, near foot forward in 0 and
+    back in 2. Frames 1 and 3 are passing poses: one foot planted under the
+    body, the other lifted beside it, and the body raised by bob.
+    """
+    if phase is None:
+        return 0.0, [(feet[0], GROUND), (feet[1], GROUND)]
+    if phase == 0:
+        return 0.0, [(-spread, GROUND), (spread, GROUND)]
+    if phase == 2:
+        return 0.0, [(spread, GROUND), (-spread, GROUND)]
+    if phase == 1:
+        return bob, [(-0.04, GROUND + lift), (0.04, GROUND)]
+    return bob, [(-0.04, GROUND), (0.04, GROUND + lift)]
+
+
+def legs(fig, phase, hips, top, feet, spread, w=0.17):
+    """The far leg (shaded) then the near leg, from hips that ride with the
+    body down to feet that follow the gait; returns the body lift."""
+    lift, pts = gait(phase, feet, spread)
+    if phase is not None:
+        # walking, seen from the side: both legs swing from near one hip
+        mid = sum(hips) / 2
+        hips = [mid + (h - mid) * 0.25 for h in hips]
+    for hip, (fx, fy), fill in zip(hips, pts, ("suitshade", "suit")):
+        leg(fig, hip, top + lift, fx, fy, fill, w=w)
+    return lift
+
+
+def draw_pathfinder(fig, phase=None):
     shadow(fig, 0, -0.86, 0.56)
-    # backpack
-    fig.rect(-0.66, -0.32, -0.3, 0.22, "suitshade", r=0.12)
-    fig.rect(-0.62, -0.1, -0.4, 0.0, "amber", r=0.03)
-    leg(fig, -0.16, -0.4, -0.2, -0.8, "suitshade")
-    leg(fig, 0.14, -0.4, 0.2, -0.8, "suit")
-    # body
-    fig.circle(0, 0, 0.52, "suit")
-    segment(fig, 0, 0, 0.52, 205, 335, "amber")
-    fig.ellipse(-0.22, 0.24, 0.1, 0.06, "suitshade", rot=35)
-    # visor
-    fig.rect(0.02, 0.0, 0.56, 0.3, "visor", r=0.14)
-    fig.rect(0.1, 0.17, 0.28, 0.24, "visorhi", r=0.035)
-    # shoulder drone on a mount
-    tube(fig, [(-0.28, 0.36), (-0.36, 0.56)], "gunmetal", 0.07, smooth=False)
-    fig.rect(-0.25, 0.6, 0.06, 0.7, "gunmetal", r=0.03)
-    fig.rect(-0.66, 0.48, -0.18, 0.8, "amber", r=0.14)
-    fig.rect(-0.6, 0.48, -0.24, 0.56, "suit", r=0.03)
-    fig.circle(-0.3, 0.68, 0.06, "visor")
-    # arm and carbine
-    tube(fig, [(0.02, -0.14), (0.36, -0.24)], "suit", 0.17, smooth=False)
-    fig.rect(0.26, -0.36, 0.84, -0.18, "gunmetal", r=0.06)
-    fig.rect(0.7, -0.33, 0.84, -0.21, "amber", r=0.03)
-    fig.circle(0.34, -0.26, 0.09, "suit")
+    lift, _ = gait(phase, (-0.2, 0.2), 0.3)
+    with fig.frame(0, lift):
+        # backpack
+        fig.rect(-0.66, -0.32, -0.3, 0.22, "suitshade", r=0.12)
+        fig.rect(-0.62, -0.1, -0.4, 0.0, "amber", r=0.03)
+    legs(fig, phase, (-0.16, 0.14), -0.4, (-0.2, 0.2), 0.3)
+    with fig.frame(0, lift):
+        # body
+        fig.circle(0, 0, 0.52, "suit")
+        segment(fig, 0, 0, 0.52, 205, 335, "amber")
+        fig.ellipse(-0.22, 0.24, 0.1, 0.06, "suitshade", rot=35)
+        # visor
+        fig.rect(0.02, 0.0, 0.56, 0.3, "visor", r=0.14)
+        fig.rect(0.1, 0.17, 0.28, 0.24, "visorhi", r=0.035)
+        # shoulder drone on a mount
+        tube(fig, [(-0.28, 0.36), (-0.36, 0.56)], "gunmetal", 0.07, smooth=False)
+        fig.rect(-0.25, 0.6, 0.06, 0.7, "gunmetal", r=0.03)
+        fig.rect(-0.66, 0.48, -0.18, 0.8, "amber", r=0.14)
+        fig.rect(-0.6, 0.48, -0.24, 0.56, "suit", r=0.03)
+        fig.circle(-0.3, 0.68, 0.06, "visor")
+        # arm and carbine
+        tube(fig, [(0.02, -0.14), (0.36, -0.24)], "suit", 0.17, smooth=False)
+        fig.rect(0.26, -0.36, 0.84, -0.18, "gunmetal", r=0.06)
+        fig.rect(0.7, -0.33, 0.84, -0.21, "amber", r=0.03)
+        fig.circle(0.34, -0.26, 0.09, "suit")
 
 
-def draw_breaker(fig):
+def draw_breaker(fig, phase=None):
     shadow(fig, 0, -0.86, 0.66)
-    leg(fig, -0.2, -0.4, -0.24, -0.8, "suitshade", w=0.22)
-    leg(fig, 0.18, -0.4, 0.22, -0.8, "suit", w=0.22)
-    # back shoulder plate
-    fig.ellipse(-0.42, 0.2, 0.3, 0.26, "teal")
-    # body: very round
-    fig.circle(0, -0.02, 0.6, "suit")
-    segment(fig, 0, -0.02, 0.6, 210, 330, "suitshade")
-    # visor slit
-    fig.rect(0.12, 0.12, 0.6, 0.3, "visor", r=0.09)
-    fig.rect(0.2, 0.2, 0.34, 0.25, "visorhi", r=0.02)
-    # big front shoulder dome
-    fig.ellipse(0.02, 0.32, 0.4, 0.27, "teal")
-    ring(fig, 0.02, 0.32, 0.4 * 0.0 + 0.24, 0.4, 200, 340, "faunateal")
-    fig.ellipse(-0.08, 0.42, 0.12, 0.06, "suit", rot=15)
-    # arm and energy-arc gauntlet
-    tube(fig, [(0.08, -0.12), (0.4, -0.22)], "suitshade", 0.2, smooth=False)
-    zig = [(0.62, -0.02), (0.74, 0.14), (0.66, 0.24), (0.82, 0.42)]
-    tube(fig, zig, "teal", 0.07, smooth=False)
-    zig2 = [(0.78, -0.24), (0.9, -0.1), (0.82, 0.0), (0.94, 0.12)]
-    tube(fig, zig2, "teal", 0.06, smooth=False)
-    fig.circle(0.56, -0.24, 0.27, "teal")
-    fig.rect(0.56, -0.38, 0.84, -0.1, "suit", r=0.1)
-    fig.circle(0.5, -0.17, 0.08, "visorhi")
+    lift = legs(fig, phase, (-0.2, 0.18), -0.4, (-0.24, 0.22), 0.32, w=0.22)
+    with fig.frame(0, lift):
+        # back shoulder plate
+        fig.ellipse(-0.42, 0.2, 0.3, 0.26, "teal")
+        # body: very round
+        fig.circle(0, -0.02, 0.6, "suit")
+        segment(fig, 0, -0.02, 0.6, 210, 330, "suitshade")
+        # visor slit
+        fig.rect(0.12, 0.12, 0.6, 0.3, "visor", r=0.09)
+        fig.rect(0.2, 0.2, 0.34, 0.25, "visorhi", r=0.02)
+        # big front shoulder dome
+        fig.ellipse(0.02, 0.32, 0.4, 0.27, "teal")
+        ring(fig, 0.02, 0.32, 0.4 * 0.0 + 0.24, 0.4, 200, 340, "faunateal")
+        fig.ellipse(-0.08, 0.42, 0.12, 0.06, "suit", rot=15)
+        # arm and energy-arc gauntlet
+        tube(fig, [(0.08, -0.12), (0.4, -0.22)], "suitshade", 0.2, smooth=False)
+        zig = [(0.62, -0.02), (0.74, 0.14), (0.66, 0.24), (0.82, 0.42)]
+        tube(fig, zig, "teal", 0.07, smooth=False)
+        zig2 = [(0.78, -0.24), (0.9, -0.1), (0.82, 0.0), (0.94, 0.12)]
+        tube(fig, zig2, "teal", 0.06, smooth=False)
+        fig.circle(0.56, -0.24, 0.27, "teal")
+        fig.rect(0.56, -0.38, 0.84, -0.1, "suit", r=0.1)
+        fig.circle(0.5, -0.17, 0.08, "visorhi")
 
 
-def draw_vector(fig):
+def draw_vector(fig, phase=None):
     shadow(fig, 0, -0.86, 0.46)
-    # back thrusters with flat flame shapes
-    for dy in (0.18, -0.12):
-        fig.poly([(-0.6, dy + 0.05), (-0.92, dy - 0.02), (-0.6, dy - 0.1)], "coral")
-        fig.rect(-0.62, dy - 0.13, -0.3, dy + 0.08, "suitshade", r=0.1)
-    leg(fig, -0.1, -0.36, -0.2, -0.8, "suitshade", w=0.13)
-    leg(fig, 0.1, -0.36, 0.2, -0.8, "suit", w=0.13)
-    # slim round body
-    fig.ellipse(0, 0.02, 0.38, 0.52, "suit")
-    # crest fin
-    fig.poly([(-0.26, 0.42), (-0.02, 0.54), (-0.5, 0.74)], "coral")
-    # coral collar band
-    segment(fig, 0, 0.02, 0.38, 215, 325, "coral")
-    # visor
-    fig.rect(0.0, 0.08, 0.42, 0.3, "visor", r=0.11)
-    fig.rect(0.08, 0.19, 0.22, 0.24, "visorhi", r=0.025)
-    # rail-lance along the arm
-    tube(fig, [(0.0, -0.12), (0.26, -0.22)], "suit", 0.14, smooth=False)
-    fig.rect(0.06, -0.3, 0.98, -0.18, "gunmetal", r=0.06)
-    fig.rect(0.3, -0.27, 0.9, -0.21, "coral", r=0.02)
-    fig.poly([(0.98, -0.32), (0.98, -0.16), (0.9, -0.24)], "suit")
-    fig.circle(0.24, -0.24, 0.08, "suit")
+    lift, _ = gait(phase, (-0.2, 0.2), 0.28)
+    with fig.frame(0, lift):
+        # back thrusters with flat flame shapes
+        for dy in (0.18, -0.12):
+            fig.poly([(-0.6, dy + 0.05), (-0.92, dy - 0.02), (-0.6, dy - 0.1)], "coral")
+            fig.rect(-0.62, dy - 0.13, -0.3, dy + 0.08, "suitshade", r=0.1)
+    legs(fig, phase, (-0.1, 0.1), -0.36, (-0.2, 0.2), 0.28, w=0.13)
+    with fig.frame(0, lift):
+        # slim round body
+        fig.ellipse(0, 0.02, 0.38, 0.52, "suit")
+        # crest fin
+        fig.poly([(-0.26, 0.42), (-0.02, 0.54), (-0.5, 0.74)], "coral")
+        # coral collar band
+        segment(fig, 0, 0.02, 0.38, 215, 325, "coral")
+        # visor
+        fig.rect(0.0, 0.08, 0.42, 0.3, "visor", r=0.11)
+        fig.rect(0.08, 0.19, 0.22, 0.24, "visorhi", r=0.025)
+        # rail-lance along the arm
+        tube(fig, [(0.0, -0.12), (0.26, -0.22)], "suit", 0.14, smooth=False)
+        fig.rect(0.06, -0.3, 0.98, -0.18, "gunmetal", r=0.06)
+        fig.rect(0.3, -0.27, 0.9, -0.21, "coral", r=0.02)
+        fig.poly([(0.98, -0.32), (0.98, -0.16), (0.9, -0.24)], "suit")
+        fig.circle(0.24, -0.24, 0.08, "suit")
 
 
-for _n, _f in (("pathfinder", draw_pathfinder), ("breaker", draw_breaker), ("vector", draw_vector)):
-    def _mk(rng, f=_f):
+def player(draw, phase=None):
+    def mk(rng):
         fig = Fig("sprite")
         with unit(fig):
-            f(fig)
+            draw(fig, phase)
         return fig
-    PICTURES[f"players/{_n}"] = _mk
+    return mk
+
+
+# The idle picture players/<id>, and walk frames players/<id>_walk0..3 at
+# the same size and framing, so the page can swap a frame in place.
+for _n, _f in (("pathfinder", draw_pathfinder), ("breaker", draw_breaker), ("vector", draw_vector)):
+    PICTURES[f"players/{_n}"] = player(_f)
+    for _i in range(WALK_FRAMES):
+        PICTURES[f"players/{_n}_walk{_i}"] = player(_f, _i)
 
 
 # ------------------------------------------------------------ alien fauna
@@ -646,7 +694,14 @@ def ICONS():
         ring(f, -0.3, 0, 0.5, 0.58, -45, 45, "xphi", n=12)
 
     def rail_bolt(f):
-        lance(f, 0, 0, 0.62, 30)
+        # a glowing rail slug through two coil rings, with a short trail
+        with f.frame(0.0, 0.0, rot=30):
+            for y in (0.15, -0.15):
+                f.poly([(-0.94, y * 0.8), (-0.42, y + 0.09), (-0.42, y - 0.09)], "xp")
+            for x in (-0.3, 0.02):
+                f.ellipse(x, 0, 0.13, 0.58, "coral")
+            f.poly(arc(-0.26, 0, 0.26, 90, 270, 12) + [(0.3, -0.26), (0.86, 0), (0.3, 0.26)], "xp")
+            f.rect(-0.3, 0.02, 0.34, 0.15, "xphi", r=0.06)
 
     def needler(f):
         for rot in (-25, 0, 25):
@@ -854,6 +909,308 @@ def icon_ticket(rng):
                       (-0.9, 0.15), (-0.72, 0), (-0.9, -0.15)], "ticket")
             fig.rect(-0.45, -0.24, 0.45, 0.24, "suit", r=0.06)
             fig.circle(0, 0, 0.1, "ticket")
+    return fig
+
+
+# ---------------------------------------------------------- gear modules
+# One icon per gear module: the subject on a chip like icons/module. The
+# chip is the same neutral grey for every module; the page draws the rarity
+# border, so no icon carries a rarity colour.
+
+def chip(fig):
+    for i in (-0.4, 0.0, 0.4):
+        for a in (-1, 1):
+            fig.rect(i - 0.07, a * 0.7, i + 0.07, a * 0.92, "gunmetal", r=0.03)
+            fig.rect(a * 0.7, i - 0.07, a * 0.92, i + 0.07, "gunmetal", r=0.03)
+    fig.rect(-0.8, -0.8, 0.8, 0.8, "badge", r=0.2)
+
+
+def up_arrow(fig, x, y, s, fill):
+    with fig.frame(x, y, s=s):
+        fig.poly([(-0.28, -1), (0.28, -1), (0.28, 0), (0.7, 0), (0, 1), (-0.7, 0), (-0.28, 0)], fill)
+
+
+def shield_shape(fig, x, y, s, fill):
+    with fig.frame(x, y, s=s):
+        fig.blob([(-0.8, 0.8), (0, 0.92), (0.8, 0.8), (0.74, -0.1), (0, -1), (-0.74, -0.1)], fill, tension=0.25)
+
+
+def cross(fig, x, y, s, fill):
+    with fig.frame(x, y, s=s):
+        fig.poly([(-0.34, 1), (0.34, 1), (0.34, 0.34), (1, 0.34), (1, -0.34), (0.34, -0.34),
+                  (0.34, -1), (-0.34, -1), (-0.34, -0.34), (-1, -0.34), (-1, 0.34), (-0.34, 0.34)], fill)
+
+
+def MODULES():
+    passive = ICONS()
+
+    def kinetic_core(f):
+        # an impact burst: damage
+        pts = []
+        for i in range(16):
+            a = math.radians(90 + i * 22.5)
+            r = 0.66 if i % 2 == 0 else 0.34
+            pts.append((r * math.cos(a), r * math.sin(a)))
+        f.poly(pts, "coral")
+        f.circle(0, 0, 0.24, "amber")
+        f.circle(-0.07, 0.07, 0.07, "goldhi")
+
+    def coolant_mod(f):
+        # a refresh arrow around a coolant drop: faster recharge
+        ring(f, 0, -0.04, 0.42, 0.6, 70, 340, "xp", n=30)
+        f.poly([(0.08, 0.62), (0.3, 0.22), (0.46, 0.68)], "xp")
+        f.blob([(0, 0.24), (0.17, -0.06), (0.12, -0.24), (0, -0.28), (-0.12, -0.24), (-0.17, -0.06)], "xphi", tension=0.5)
+
+    def plating_mod(f):
+        # a riveted suit plate with a health cross
+        f.rect(-0.6, -0.56, 0.6, 0.56, "suit", r=0.16)
+        cross(f, 0, 0, 0.34, "heal")
+        for x in (-0.44, 0.44):
+            for y in (-0.4, 0.4):
+                f.circle(x, y, 0.05, "suitshade")
+
+    def magnet_mod(f):
+        with f.frame(0, -0.02, s=1.15):
+            passive["magnet_coil"][0](f)
+
+    def thruster_mod(f):
+        # a boot with a jet from the heel and speed lines: move speed
+        for y in (0.44, 0.2):
+            f.stroke([(-0.66, y), (-0.4, y)], width=3.0, role="suitshade")
+        f.blob([(-0.18, 0.58), (0.18, 0.58), (0.2, 0.02), (0.62, -0.06), (0.64, -0.4), (-0.2, -0.4)], "suit", tension=0.15)
+        f.rect(-0.22, -0.48, 0.68, -0.32, "gunmetal", r=0.06)
+        f.rect(-0.16, 0.34, 0.16, 0.46, "coral", r=0.03)
+        with f.frame(-0.46, -0.24, s=0.3, rot=90):
+            flame(f, 0, 0, 1)
+
+    def overclock(f):
+        # stacked chevrons pointing up: the weapon starts a level higher
+        for i, fill in enumerate(("amber", "amber", "goldhi")):
+            y = -0.52 + i * 0.36
+            f.poly([(-0.56, y), (0, y + 0.42), (0.56, y), (0.56, y - 0.2), (0, y + 0.2), (-0.56, y - 0.2)], fill)
+
+    def field_lens(f):
+        # a lens with four arrows pushing out: larger areas
+        f.circle(0, 0, 0.3, "teal")
+        f.circle(-0.08, 0.08, 0.09, "xphi")
+        for a in (45, 135, 225, 315):
+            with f.frame(0, 0, rot=a):
+                f.poly([(0.42, 0.1), (0.42, 0.22), (0.68, 0), (0.42, -0.22), (0.42, -0.1)], "teal")
+
+    def spare_reroll(f):
+        # two cards fanned with a spare one added
+        with f.frame(-0.12, -0.04, rot=16):
+            f.rect(-0.3, -0.46, 0.3, 0.46, "suitshade", r=0.08)
+        with f.frame(0.08, -0.08, rot=-10):
+            f.rect(-0.3, -0.46, 0.3, 0.46, "suit", r=0.08)
+            f.poly([(0, 0.2), (0.14, 0), (0, -0.2), (-0.14, 0)], "ticket")
+        cross(f, 0.44, 0.44, 0.2, "amber")
+
+    def shield_charge(f):
+        # a shield with a charge bolt: a recharging shield
+        shield_shape(f, 0, 0.02, 0.66, "xp")
+        shield_shape(f, 0, 0.06, 0.44, "badge")
+        bolt_shape(f, 0, 0.0, 0.38, "amber")
+
+    def split_chamber(f):
+        with f.frame(0, 0, s=1.1):
+            passive["split_feed"][0](f)
+
+    def aegis_core(f):
+        # a heavy hexagonal armour plate with a round core: armour
+        f.poly(arc(0, 0, 0.68, 90, 450, 6)[:-1], "offwhite")
+        f.poly(arc(0, 0, 0.44, 90, 450, 6)[:-1], "gunmetal")
+        f.circle(0, 0, 0.2, "teal")
+        f.circle(-0.06, 0.06, 0.06, "suit")
+
+    def rift_key(f):
+        # a key whose bow is a rift ring: more tickets from rifts
+        with f.frame(-0.04, 0.04, rot=-35):
+            f.rect(-0.1, -0.1, 0.74, 0.1, "suit", r=0.05)
+            f.rect(0.42, -0.34, 0.54, -0.06, "suit", r=0.03)
+            f.rect(0.62, -0.28, 0.74, -0.06, "suit", r=0.03)
+            f.circle(-0.34, 0, 0.36, "rifthi")
+            f.circle(-0.34, 0, 0.26, "rift")
+            f.circle(-0.34, 0, 0.1, "ink")
+
+    out = {}
+    for fn in (kinetic_core, coolant_mod, plating_mod, magnet_mod, thruster_mod, overclock, field_lens,
+               spare_reroll, shield_charge, split_chamber, aegis_core, rift_key):
+        out[fn.__name__] = fn
+    return out
+
+
+def make_module(draw):
+    def mk(rng):
+        fig = Fig("icon")
+        with unit(fig, pad=0.9):
+            chip(fig)
+            draw(fig)
+        return fig
+    return mk
+
+
+for _id, _draw in MODULES().items():
+    PICTURES[f"icons/mod_{_id}"] = make_module(_draw)
+
+
+# ------------------------------------------------------ empty gear slots
+# Faint silhouettes for an empty slot box: one low-contrast fill and an ink
+# edge, so they sit back behind whatever fills a slot.
+
+FAINT, FAINT_DETAIL = "badgehi", "badge"
+
+
+def slot_icon(draw):
+    def mk(rng):
+        fig = Fig("icon")
+        with unit(fig, pad=0.9):
+            draw(fig)
+        return fig
+    return mk
+
+
+@pic("icons/slot_core")
+@slot_icon
+def slot_core(f):
+    # a weapon core: a carbine body around a round core
+    f.rect(-0.7, -0.18, 0.78, 0.2, FAINT, r=0.1)
+    f.rect(-0.46, -0.6, -0.18, -0.12, FAINT, r=0.08)
+    f.rect(0.5, 0.2, 0.7, 0.3, FAINT, r=0.03)
+    f.circle(0.0, 0.0, 0.34, FAINT)
+    f.circle(0.0, 0.0, 0.15, FAINT_DETAIL)
+
+
+@pic("icons/slot_frame")
+@slot_icon
+def slot_frame(f):
+    # a chest armour frame: shoulders and a rounded breastplate
+    f.ellipse(-0.5, 0.42, 0.28, 0.2, FAINT)
+    f.ellipse(0.5, 0.42, 0.28, 0.2, FAINT)
+    f.blob([(-0.46, 0.5), (0, 0.42), (0.46, 0.5), (0.5, -0.1), (0.3, -0.58), (0, -0.66), (-0.3, -0.58), (-0.5, -0.1)],
+           FAINT, tension=0.35)
+    f.stroke([(0, 0.36), (0, -0.52)], width=1.6)
+    f.stroke(arc(0, 0.62, 0.22, 200, 340, 10), width=1.6)
+
+
+@pic("icons/slot_utility")
+@slot_icon
+def slot_utility(f):
+    # a utility pack: a rounded pack with a flap and two side pouches
+    f.rect(-0.7, -0.5, -0.4, 0.1, FAINT, r=0.1)
+    f.rect(0.4, -0.5, 0.7, 0.1, FAINT, r=0.1)
+    f.rect(-0.46, -0.66, 0.46, 0.5, FAINT, r=0.18)
+    f.rect(-0.46, 0.04, 0.46, 0.5, FAINT, r=0.18)
+    f.rect(-0.1, -0.06, 0.1, 0.14, FAINT_DETAIL, r=0.03)
+    f.stroke(arc(0, 0.5, 0.2, 20, 160, 10), width=3.0, role="ink")
+
+
+# ------------------------------------------------------- achievements
+# Achievement category icons on a plain round badge; ach_hidden is a dim
+# badge with a question mark for achievements the player cannot see yet.
+
+def ACHIEVEMENTS():
+    def survive(f):
+        # an hourglass
+        f.rect(-0.42, 0.5, 0.42, 0.64, "suitshade", r=0.05)
+        f.rect(-0.42, -0.64, 0.42, -0.5, "suitshade", r=0.05)
+        f.poly([(-0.34, 0.5), (0.34, 0.5), (0.06, 0.0), (0.34, -0.5), (-0.34, -0.5), (-0.06, 0.0)], "suit")
+        f.poly([(-0.18, 0.3), (0.18, 0.3), (0.0, 0.04)], "amber")
+        f.poly([(-0.3, -0.48), (0.3, -0.48), (0.0, -0.22)], "amber")
+
+    def slayer(f):
+        # two crossed blades
+        for rot in (45, 135):
+            with f.frame(0, 0, rot=rot):
+                f.poly([(-0.2, -0.09), (0.56, -0.09), (0.74, 0), (0.56, 0.09), (-0.2, 0.09)], "suit")
+                f.rect(-0.26, -0.2, -0.16, 0.2, "gunmetal", r=0.03)
+                f.rect(-0.62, -0.07, -0.26, 0.07, "amber", r=0.04)
+
+    def boss(f):
+        # a big horned alien head
+        for a in (-1, 1):
+            f.blob([(0.3 * a, 0.2), (0.62 * a, 0.36), (0.66 * a, 0.7), (0.5 * a, 0.42), (0.24 * a, 0.36)], "faunatealhi", tension=0.4)
+        f.blob([(-0.48, 0.1), (-0.3, 0.42), (0.3, 0.42), (0.48, 0.1), (0.3, -0.42), (0, -0.56), (-0.3, -0.42)], "violet", tension=0.55)
+        eye(f, -0.18, 0.06, 0.1)
+        eye(f, 0.18, 0.06, 0.1)
+        for x in (-0.12, 0.0, 0.12):
+            f.poly([(x - 0.05, -0.28), (x + 0.05, -0.28), (x, -0.42)], "suit")
+
+    def evolve(f):
+        # two shapes merging into an upward arrow
+        tube(f, [(-0.44, -0.42), (-0.2, -0.16), (0, 0.0)], "teal", 0.1)
+        tube(f, [(0.44, -0.42), (0.2, -0.16), (0, 0.0)], "amber", 0.1)
+        f.circle(-0.46, -0.44, 0.15, "teal")
+        f.rect(0.32, -0.58, 0.6, -0.3, "amber", r=0.05)
+        up_arrow(f, 0, 0.26, 0.38, "gold")
+
+    def character(f):
+        # a round player helmet
+        f.circle(0, -0.02, 0.56, "suit")
+        segment(f, 0, -0.02, 0.56, 210, 330, "suitshade")
+        f.rect(-0.38, -0.06, 0.38, 0.26, "visor", r=0.15)
+        f.rect(-0.24, 0.12, -0.04, 0.2, "visorhi", r=0.035)
+
+    def rift(f):
+        # a portal ring
+        f.ellipse(0, 0, 0.6, 0.6, "rift")
+        ring(f, 0, 0, 0.42, 0.5, 20, 160, "rifthi", n=14)
+        ring(f, 0, 0, 0.42, 0.5, 200, 340, "rifthi", n=14)
+        f.ellipse(0, 0, 0.28, 0.28, "ink")
+        f.ellipse(-0.08, 0.08, 0.07, 0.05, "rifthi")
+
+    def cache(f):
+        # a supply crate with hazard bands
+        f.rect(-0.6, -0.5, 0.6, 0.3, "offwhite", r=0.1)
+        f.rect(-0.6, 0.14, 0.6, 0.5, "gunmetal", r=0.1)
+        f.rect(-0.13, -0.12, 0.13, 0.24, "hazard", r=0.04)
+        f.rect(-0.6, -0.5, -0.36, 0.3, "hazard", r=0.07)
+        f.rect(0.36, -0.5, 0.6, 0.3, "hazard", r=0.07)
+
+    def coop(f):
+        # two round heads side by side
+        for x, y, acc in ((-0.26, 0.08, "amber"), (0.26, -0.08, "coral")):
+            f.circle(x, y, 0.36, "suit")
+            segment(f, x, y, 0.36, 210, 330, acc)
+            f.rect(x - 0.06, y - 0.02, x + 0.34, y + 0.18, "visor", r=0.09)
+            f.rect(x + 0.02, y + 0.09, x + 0.14, y + 0.14, "visorhi", r=0.02)
+
+    def outfit(f):
+        # a wrench
+        with f.frame(0, 0, rot=-45):
+            f.rect(-0.66, -0.14, 0.34, 0.14, "suitshade", r=0.1)
+            f.circle(0.42, 0, 0.3, "suitshade")
+            f.rect(0.4, -0.11, 0.78, 0.11, "badge")
+            f.circle(-0.62, 0, 0.2, "suitshade")
+            f.circle(-0.62, 0, 0.08, "badge")
+
+    def weapon(f):
+        # a crosshair
+        ring(f, 0, 0, 0.38, 0.5, 0, 360, "suit", n=40)
+        for a in (0, 90, 180, 270):
+            with f.frame(0, 0, rot=a):
+                f.rect(0.22, -0.05, 0.68, 0.05, "suit", r=0.03)
+        f.circle(0, 0, 0.1, "coral")
+
+    out = {}
+    for fn in (survive, slayer, boss, evolve, character, rift, cache, coop, outfit, weapon):
+        out[fn.__name__] = fn
+    return out
+
+
+for _id, _draw in ACHIEVEMENTS().items():
+    PICTURES[f"icons/ach_{_id}"] = make_icon(_draw, "badgehi")
+
+
+@pic("icons/ach_hidden")
+def ach_hidden(rng):
+    fig = Fig("icon")
+    with unit(fig, pad=0.9):
+        fig.circle(0, 0, 0.96, "badge")
+        fig.circle(0, 0, 0.8, "shadow")
+        # a question mark drawn as shapes: a hook and a dot
+        tube(fig, arc(0, 0.22, 0.24, 160, -60, 14) + [(0.02, -0.08), (0, -0.2)], "badgehi", 0.16)
+        fig.circle(0, -0.46, 0.1, "badgehi")
     return fig
 
 

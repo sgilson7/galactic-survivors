@@ -80,10 +80,22 @@ pub enum Align {
 pub const ALIGNS: [&str; 3] = ["left", "center", "right"];
 
 /// Pictures the renderer loads from `art/<name>.png`, by index.
-pub const SPRITES: [&str; 22] = [
+pub const SPRITES: [&str; 34] = [
     "players/pathfinder",
     "players/breaker",
     "players/vector",
+    "players/pathfinder_walk0",
+    "players/pathfinder_walk1",
+    "players/pathfinder_walk2",
+    "players/pathfinder_walk3",
+    "players/breaker_walk0",
+    "players/breaker_walk1",
+    "players/breaker_walk2",
+    "players/breaker_walk3",
+    "players/vector_walk0",
+    "players/vector_walk1",
+    "players/vector_walk2",
+    "players/vector_walk3",
     "enemies/skitter",
     "enemies/mote",
     "enemies/carapace",

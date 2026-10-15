@@ -4,7 +4,7 @@ The source of truth for what each word in Galactic Survivors means. Strings, tes
 
 ### Achievement
 
-A goal listed from the first launch with the player's progress toward it. Earning one pays gold once and adds a small permanent XP bonus to every later run; some also unlock a character, an evolution or a banish.
+A goal on the achievement grid. A few show from the first launch; earning one shows the ones next to it, and a hidden one can still be earned before it shows. Earning one pays gold and tickets once, and many also open an outfitter rank, a gear slot, an ability, an evolution, a character or a banish.
 
 Not: trophy, badge
 
@@ -36,7 +36,7 @@ A strong single enemy, the Stalker, met inside a rift.
 
 A stronger form of an ability. An ability at its highest level, held together with its partner passive, can evolve; the next level-up offers it as a card, and a supply cache or a rift reward evolves it too.
 
-Not: fusion, merge
+Not: fusion
 
 ### Ghost
 
@@ -52,15 +52,35 @@ Not: coins, credits, money
 
 The moment the shared experience bar fills. The field waits while each player chooses one card.
 
+### Build
+
+The abilities and passives a player holds in the current run. Pausing a solo run shows it, and in co-op a key shows it without pausing: what each one does now and what it still needs to evolve.
+
+### Codex
+
+The list of every ability, passive and evolution, with their numbers and how they evolve. It opens from the title screen and from the build during a run.
+
 ### Module
 
-A part pulled from the salvage cache that a character carries into a run. Each character has two module slots; a duplicate pull raises the module's rank.
+A part pulled from the salvage cache that a character carries into a run. Every pull is its own piece with a rank, and each module fits one kind of gear slot.
 
-Not: relic, artifact, gear
+Not: relic, artifact
+
+### Gear
+
+The modules a character wears, one in each open gear slot. The gear window shows the slots beside the stash of every piece the player owns. Some slots start locked, and achievements open them.
+
+### Merge
+
+Combining copies of one module at the same rank into a single piece a rank higher, in the gear window. Abilities never merge; they evolve.
+
+### Scrap
+
+Turning a piece the player is not wearing into gold, in the gear window. Rarer and higher-rank pieces pay more.
 
 ### Outfitter
 
-The shop between runs. It sells permanent ranks for gold and never sells extra experience or extra gold.
+The shop between runs. It sells permanent ranks for gold and never sells extra experience or extra gold. Most ranks start locked, and achievements open them one at a time.
 
 ### Raid
 

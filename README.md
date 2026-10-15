@@ -10,10 +10,10 @@ The game started from a conversation between two players of Vampire Survivors, H
 
 - **Moving is the whole job.** Both players agreed that, moment to moment, the skill in these games is steering. So nothing needs a fire button or a reload, and the camera never turns or shakes.
 - **Contact damage should not punish melee.** One player described a crowd of small enemies landing many hits at once, which made close-range builds feel bad. Here an enemy can hurt you at most once per short window, and any hit gives a moment of invulnerability. The test puts twenty enemies on the player at once and expects exactly one hit.
-- **Evolutions should come earlier.** When an ability can evolve, the next level-up offers the evolution as a card, so it never waits for a boss to drop a crate. In the run probe, a player who builds toward it evolves at about three to four minutes.
+- **Evolutions should come earlier, but not too early.** When an ability can evolve, the next level-up offers the evolution as a card, so it never waits for a boss to drop a crate. After the first playtest, evolving also needs the partner passive at level three, because players evolved within two or three minutes. In the run probe, a player who builds toward it now evolves at about three to six minutes.
 - **No character should be useless against a boss.** Both players remembered a character whose attacks could not hurt most bosses. Here no enemy is immune to anything, and a test fires every character's starting ability at every boss.
-- **A wall should always be grindable.** Gold is kept when you lose, and the outfitter sells permanent upgrades. At the person's request it sells no extra experience or extra gold, since those are the upgrade everyone has to buy first.
-- **Achievements should be visible and worth something.** All twenty are listed from the start with your progress. Each pays gold and adds one percent experience to every later run, and some unlock a character or an evolution.
+- **A wall should always be grindable.** Gold is kept when you lose, and the outfitter sells permanent upgrades. At the person's request it sells no extra experience or extra gold, since those are the upgrade everyone has to buy first. After the first playtest, most outfitter ranks start locked and achievements open them one at a time, so nobody can buy everything after one good run.
+- **Achievements should be worth something, and some should be hard.** There are 56 on a grid, as in Halls of Torment. A few show at the start; earning one shows the ones next to it, and a hidden one can still be earned before you see it. Each pays gold and tickets, and many open an outfitter rank, a gear slot, an ability, an evolution or a character.
 
 ## How to play
 
@@ -21,13 +21,16 @@ The game started from a conversation between two players of Vampire Survivors, H
 - **Aim** with the mouse. Only the Rail Bolt and the Cutting Beam use it, and Auto-aim in Settings turns that off.
 - **Choose cards** with 1, 2 or 3, or click one. R draws a new hand. A banish removes a card for the rest of the run.
 - **Dash** with Space, as Vector.
-- **Pause** with Esc in a solo run.
+- **Pause** with Esc in a solo run. The pause screen shows your build: what each ability does now, and what it still needs to evolve. In co-op, press I to see your build without pausing.
+- **The codex**, from the title screen or the pause screen, lists every ability, passive and evolution with its numbers and recipe.
 
 Three characters: Pathfinder (balanced; its drone does the aiming), Breaker (a heavy close-range fighter who takes half damage from contact) and Vector (fast and fragile, aims with the pointer, and can dash). Breaker costs gold; Vector unlocks when you defeat the Burrower.
 
 **Your progress is a file.** The page keeps nothing in your browser. After a run, choose Download save, and next time choose Load save and pick that file. Without it, gold, unlocks and achievements start over.
 
-**The salvage cache** turns tickets, which bosses, rifts and achievements give, into modules a character carries into a run. The odds are on the screen, and a rare or better is certain within ten pulls. There is no real money anywhere in the game.
+**The salvage cache** turns tickets, which bosses, rifts and achievements give, into modules. The odds are on the screen, and a rare or better is certain within ten pulls. There is no real money anywhere in the game.
+
+**The gear window** shows the chosen character's four gear slots (core, frame and two utility) beside the stash of every module you own. Each module fits one kind of slot. The two utility slots start locked, and achievements open them. Two copies of a module at the same rank merge into one piece a rank higher, up to rank five, and a piece you are not wearing can be scrapped for gold.
 
 ## Playing together
 

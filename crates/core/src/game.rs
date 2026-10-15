@@ -25,6 +25,7 @@ pub const BITS: &[(&str, u32)] = &[
     ("card3", 128),
     ("reroll", 256),
     ("pause", 512),
+    ("inspect", 1024),
 ];
 
 /// Screen pixels a touch must drag before it steers.
@@ -49,6 +50,8 @@ pub enum Screen {
     Run,
     Results,
     Help,
+    Gear,
+    Codex,
 }
 
 impl Screen {
@@ -64,6 +67,8 @@ impl Screen {
             Screen::Run => "run",
             Screen::Results => "results",
             Screen::Help => "help",
+            Screen::Gear => "gear",
+            Screen::Codex => "codex",
         }
     }
 
@@ -77,6 +82,8 @@ impl Screen {
             "settings" => Screen::Settings,
             "coop" => Screen::Coop,
             "help" => Screen::Help,
+            "gear" => Screen::Gear,
+            "codex" => Screen::Codex,
             _ => return None,
         })
     }
@@ -114,6 +121,15 @@ pub struct Game {
     last_bits: u32,
     pending_card: u8,
     pub paused: bool,
+    /// The build overlay in a co-op run, which does not pause (T1).
+    pub inspect: bool,
+    /// The codex is showing, on its screen or over a run (T10).
+    pub codex_open: bool,
+    pub codex_tab: String,
+    /// The gear piece chosen on the gear screen, 0 for none.
+    pub gear_pick: u32,
+    /// The achievement chosen on the grid.
+    pub ach_pick: String,
     coop_due: i32,
     pub payout: Option<Payout>,
     pub pulls: Vec<Pull>,
@@ -149,6 +165,11 @@ impl Game {
             last_bits: 0,
             pending_card: 0,
             paused: false,
+            inspect: false,
+            codex_open: false,
+            codex_tab: "abilities".into(),
+            gear_pick: 0,
+            ach_pick: String::new(),
             coop_due: 0,
             payout: None,
             pulls: Vec::new(),
@@ -241,8 +262,8 @@ impl Game {
             self.clock = Clock::default();
             return;
         }
-        if pressed & bit("pause") != 0 && !self.coop_running() {
-            self.paused = !self.paused;
+        if pressed & (bit("pause") | bit("inspect")) != 0 {
+            self.toggle_overlay();
         }
         let tick_bits = self.clock.frame(now_us, raw.bits);
         let local_offer = self
@@ -321,6 +342,21 @@ impl Game {
         }
     }
 
+    /// Opens or closes the build overlay: a pause in a solo run, a view
+    /// that leaves the run going in co-op.
+    pub fn toggle_overlay(&mut self) {
+        if self.coop_running() {
+            self.inspect = !self.inspect;
+        } else {
+            self.paused = !self.paused;
+        }
+        self.codex_open = false;
+    }
+
+    pub fn overlay_open(&self) -> bool {
+        self.paused || self.inspect
+    }
+
     pub fn end_run(&mut self) {
         let Some(w) = self.world.take() else { return };
         let payout = self.save.finish_run(&self.content, &w, self.seat);
@@ -328,6 +364,8 @@ impl Game {
         self.saved_since_run = false;
         self.screen = Screen::Results;
         self.paused = false;
+        self.inspect = false;
+        self.codex_open = false;
         if let Some(link) = self.session.as_mut() {
             link.running = false;
         }
@@ -352,6 +390,8 @@ impl Game {
         self.screen = Screen::Run;
         self.clock = Clock::default();
         self.paused = false;
+        self.inspect = false;
+        self.codex_open = false;
         self.pending_card = 0;
         self.payout = None;
     }
@@ -482,6 +522,7 @@ impl Game {
                     return Err(self.refusal("run.busy"));
                 }
                 self.screen = s;
+                self.codex_open = s == Screen::Codex;
                 if s == Screen::Cache {
                     self.pulls.clear();
                 }
@@ -510,11 +551,59 @@ impl Game {
                 .save
                 .buy_character(&self.content, value)
                 .map_err(|k| self.refusal(k))?,
-            "module.toggle" => {
+            "gear.pick" => {
+                let uid = self.uid(value)?;
+                self.gear_pick = if self.gear_pick == uid { 0 } else { uid };
+            }
+            "gear.equip" => {
+                let uid = self.uid(value)?;
                 let ch = self.save.character.clone();
                 self.save
-                    .toggle_module(&self.content, &ch, value)
+                    .equip_auto(&self.content, &ch, uid)
                     .map_err(|k| self.refusal(k))?;
+            }
+            "gear.unequip" => {
+                let uid = self.uid(value)?;
+                let ch = self.save.character.clone();
+                self.save.unequip(&ch, uid);
+            }
+            "gear.merge" => {
+                let uid = self.uid(value)?;
+                self.save.merge(&self.content, uid).map_err(|k| self.refusal(k))?;
+            }
+            "gear.merge_all" => {
+                self.save.merge_all(&self.content);
+                if self.save.piece(self.gear_pick).is_none() {
+                    self.gear_pick = 0;
+                }
+            }
+            "gear.scrap" => {
+                let uid = self.uid(value)?;
+                self.save.scrap(&self.content, uid).map_err(|k| self.refusal(k))?;
+                self.gear_pick = 0;
+            }
+            "ach.pick" => {
+                if self.content.achievement(value).is_none() {
+                    return Err(format!("There is no achievement \"{value}\"."));
+                }
+                self.ach_pick = value.to_string();
+            }
+            "codex.open" => {
+                self.codex_open = true;
+            }
+            "codex.close" => {
+                self.codex_open = false;
+            }
+            "codex.tab" => {
+                if !crate::view::CODEX_TABS.contains(&value) {
+                    return Err(format!("There is no codex tab \"{value}\"."));
+                }
+                self.codex_tab = value.to_string();
+            }
+            "run.inspect" => {
+                if self.world.is_some() {
+                    self.toggle_overlay();
+                }
             }
             "run.start" => self.start_solo()?,
             "run.pause" => {
@@ -522,7 +611,11 @@ impl Game {
                     self.paused = true;
                 }
             }
-            "run.resume" => self.paused = false,
+            "run.resume" => {
+                self.paused = false;
+                self.inspect = false;
+                self.codex_open = false;
+            }
             "run.quit" => {
                 if self.world.is_some() {
                     if self.coop_running() {
@@ -562,6 +655,14 @@ impl Game {
             other => return Err(format!("Unknown action \"{other}\".")),
         }
         Ok(())
+    }
+
+    fn uid(&self, value: &str) -> Result<u32, String> {
+        value
+            .parse::<u32>()
+            .ok()
+            .filter(|u| self.save.piece(*u).is_some())
+            .ok_or_else(|| self.refusal("gear.unknown"))
     }
 
     pub fn save_text(&self) -> String {
@@ -671,6 +772,51 @@ pub mod tests {
     }
 
     #[test]
+    fn the_build_pauses_a_solo_run_but_not_a_co_op_one() {
+        let mut g = game();
+        g.act("run.start", "").unwrap();
+        let inspect = Raw {
+            bits: bit("inspect"),
+            ..Raw::default()
+        };
+        g.advance(0, inspect);
+        assert!(g.paused && g.overlay_open());
+        let t = g.world.as_ref().unwrap().tick;
+        for f in 1..60 {
+            g.advance(f * 16_667, Raw::default());
+        }
+        assert_eq!(
+            g.world.as_ref().unwrap().tick,
+            t,
+            "a paused solo run stands still"
+        );
+        g.act("run.resume", "").unwrap();
+        assert!(!g.overlay_open());
+
+        let mut host = game();
+        let mut join = game();
+        host.host(7, "gs");
+        join.join("ABCDE", "gs").unwrap();
+        host.net_peer(2);
+        join.net_peer(1);
+        wire(&mut host, &mut join);
+        wire(&mut host, &mut join);
+        host.act("coop.start", "").unwrap();
+        wire(&mut host, &mut join);
+        host.act("run.inspect", "").unwrap();
+        assert!(
+            host.inspect && !host.paused,
+            "co-op shows the build without pausing"
+        );
+        for f in 0..120i64 {
+            host.advance(f * 16_667, Raw::default());
+            join.advance(f * 16_667, Raw::default());
+            wire(&mut host, &mut join);
+        }
+        assert!(host.world.as_ref().unwrap().tick > 60, "the co-op run kept going");
+    }
+
+    #[test]
     fn an_unknown_action_is_an_error() {
         let mut g = game();
         assert!(g.act("nope", "").is_err());
@@ -681,7 +827,8 @@ pub mod tests {
     fn a_locked_character_cannot_be_picked_until_bought() {
         let mut g = game();
         assert!(g.act("hangar.pick", "breaker").is_err());
-        g.save.gold = 600;
+        // breaker costs 500 gold in content.json
+        g.save.gold = 500;
         g.act("hangar.buy", "breaker").unwrap();
         assert_eq!(g.save.gold, 0);
         g.act("hangar.pick", "breaker").unwrap();

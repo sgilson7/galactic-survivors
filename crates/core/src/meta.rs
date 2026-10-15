@@ -1,17 +1,17 @@
 //! What lasts between runs: gold, tickets, shop ranks, unlocked characters,
-//! achievement progress, modules from the salvage cache, and settings. It
+//! achievement progress, gear from the salvage cache, and settings. It
 //! is all one `Save`, which the core writes as a JSON file for the page to
 //! download and reads back from a file the player chooses, as in Gear
 //! Master 2D. The page keeps nothing in browser storage (D17).
 
-use crate::content::{Content, Rarity};
+use crate::content::{Achievement, Content, Rarity};
 use crate::rng::Rng;
 use crate::world::{Loadout, Phase, Stats, World};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const SAVE_FORMAT: &str = "galactic-survivors-save";
-pub const SAVE_VERSION: u32 = 1;
+pub const SAVE_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -20,10 +20,20 @@ pub struct Settings {
     pub damage_numbers: bool,
 }
 
+/// One module the player owns. Two of the same module can share an id;
+/// `uid` tells them apart (T8).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Owned {
+pub struct Piece {
+    pub uid: u32,
     pub id: String,
     pub rank: i32,
+}
+
+/// A version 1 module: one per id, duplicates folded into its rank.
+#[derive(Debug, Clone, Deserialize)]
+struct OwnedV1 {
+    id: String,
+    rank: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,9 +47,10 @@ pub struct Save {
     /// Lifetime numbers the achievements read: totals and bests.
     pub stats: BTreeMap<String, u64>,
     pub claimed: Vec<String>,
-    pub modules: Vec<Owned>,
-    /// Module ids equipped per character, at most `cache.slots` each.
-    pub equipped: BTreeMap<String, Vec<String>>,
+    pub modules: Vec<Piece>,
+    pub next_uid: u32,
+    /// Gear per character: one uid per slot in `gear.slots`, 0 for empty.
+    pub equipped: BTreeMap<String, Vec<u32>>,
     pub pity_rare: u32,
     pub pity_epic: u32,
     pub rng: Rng,
@@ -73,7 +84,7 @@ impl Save {
         let unlocked = content
             .characters
             .iter()
-            .filter(|c| c.unlock_gold == 0 && c.unlock_achievement.is_empty())
+            .filter(|c| c.unlock_gold == 0 && content.unlocked_by("character", &c.id).is_none())
             .map(|c| c.id.clone())
             .collect();
         Save {
@@ -86,6 +97,7 @@ impl Save {
             stats: BTreeMap::new(),
             claimed: Vec::new(),
             modules: Vec::new(),
+            next_uid: 1,
             equipped: BTreeMap::new(),
             pity_rare: 0,
             pity_epic: 0,
@@ -100,23 +112,98 @@ impl Save {
     }
 
     /// Reads a save file. A file from another game or a later version is
-    /// refused with the key of a string that says which.
+    /// refused with the key of a string that says which. A version 1 file
+    /// is brought up to version 2 (`from_v1`).
     pub fn from_json(content: &Content, text: &str) -> Result<Save, &'static str> {
         let value: serde_json::Value = serde_json::from_str(text).map_err(|_| "save.not_json")?;
         if value.get("format").and_then(|f| f.as_str()) != Some(SAVE_FORMAT) {
             return Err("save.wrong_game");
         }
-        if value.get("version").and_then(|v| v.as_u64()) != Some(SAVE_VERSION as u64) {
+        let version = value.get("version").and_then(|v| v.as_u64());
+        let mut save = if version == Some(1) {
+            Save::from_v1(content, value)?
+        } else if version == Some(SAVE_VERSION as u64) {
+            serde_json::from_value(value).map_err(|_| "save.damaged")?
+        } else {
             return Err("save.wrong_version");
-        }
-        let mut save: Save = serde_json::from_value(value).map_err(|_| "save.damaged")?;
+        };
         // names that no longer exist in the content are dropped, not trusted
         save.unlocked.retain(|c| content.character(c).is_some());
         save.modules.retain(|m| content.module(&m.id).is_some());
+        save.claimed.retain(|a| content.achievement(a).is_some());
         save.ranks
             .retain(|id, _| content.shop.iter().any(|s| &s.id == id));
+        let uids: Vec<u32> = save.modules.iter().map(|m| m.uid).collect();
+        let slots = content.gear.slots.len();
+        for list in save.equipped.values_mut() {
+            list.resize(slots, 0);
+            for u in list.iter_mut() {
+                if !uids.contains(u) {
+                    *u = 0;
+                }
+            }
+        }
+        save.next_uid = save.next_uid.max(uids.iter().max().copied().unwrap_or(0) + 1);
         if content.character(&save.character).is_none() || !save.unlocked.contains(&save.character) {
             save.character = content.characters[0].id.clone();
+        }
+        save.claim(content);
+        Ok(save)
+    }
+
+    /// Version 1 kept one module per id, two slots a character, and
+    /// outfitter ranks with no caps. Each module becomes one piece at its
+    /// rank and keeps its place where a slot of its kind is open; outfitter
+    /// ranks are refunded at today's prices so they can be bought again
+    /// under the caps (T3).
+    fn from_v1(content: &Content, mut value: serde_json::Value) -> Result<Save, &'static str> {
+        let obj = value.as_object_mut().ok_or("save.damaged")?;
+        let old_modules: Vec<OwnedV1> = obj
+            .get("modules")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|_| "save.damaged")?
+            .unwrap_or_default();
+        let old_equipped: BTreeMap<String, Vec<String>> = obj
+            .get("equipped")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|_| "save.damaged")?
+            .unwrap_or_default();
+        let old_ranks: BTreeMap<String, i32> = obj
+            .get("ranks")
+            .cloned()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|_| "save.damaged")?
+            .unwrap_or_default();
+        obj.insert("version".into(), SAVE_VERSION.into());
+        obj.insert("modules".into(), serde_json::Value::Array(Vec::new()));
+        obj.insert("next_uid".into(), 1.into());
+        obj.insert("equipped".into(), serde_json::Value::Object(Default::default()));
+        obj.insert("ranks".into(), serde_json::Value::Object(Default::default()));
+        let mut save: Save = serde_json::from_value(value).map_err(|_| "save.damaged")?;
+        save.claimed.retain(|a| content.achievement(a).is_some());
+        for (id, rank) in &old_ranks {
+            for r in 0..*rank {
+                save.gold += Save::rank_cost(content, id, r).unwrap_or(0);
+            }
+        }
+        for m in old_modules {
+            if content.module(&m.id).is_some() {
+                save.add_piece(&m.id, m.rank.clamp(1, content.cache.max_rank));
+            }
+        }
+        for (ch, ids) in old_equipped {
+            for id in ids {
+                let Some(uid) = save.modules.iter().find(|m| m.id == id).map(|m| m.uid) else {
+                    continue;
+                };
+                // a v1 module keeps its place only where a slot is free
+                let _ = save.equip_auto(content, &ch, uid);
+            }
         }
         Ok(save)
     }
@@ -134,32 +221,96 @@ impl Save {
         *e = (*e).max(v);
     }
 
+    /// Keeps the lowest nonzero value (a fastest time).
+    fn low_stat(&mut self, key: &str, v: u64) {
+        if v == 0 {
+            return;
+        }
+        let e = self.stats.entry(key.to_string()).or_insert(0);
+        if *e == 0 || v < *e {
+            *e = v;
+        }
+    }
+
+    // ---- what achievements unlock ------------------------------------------
+
+    /// Whether `kind:id` is still locked: some achievement unlocks it and
+    /// that achievement is not earned.
+    pub fn locked(&self, content: &Content, kind: &str, id: &str) -> bool {
+        content
+            .unlocked_by(kind, id)
+            .map(|a| !self.claimed.contains(&a.id))
+            .unwrap_or(false)
+    }
+
+    /// How many ranks of an outfitter line are for sale now: the ranks
+    /// open from the start plus one for each earned achievement that opens
+    /// one (T3).
+    pub fn rank_cap(&self, content: &Content, id: &str) -> i32 {
+        let Some(item) = content.shop.iter().find(|s| s.id == id) else {
+            return 0;
+        };
+        let opened = content
+            .achievements
+            .iter()
+            .filter(|a| a.unlocks() == Some(("rank", id)) && self.claimed.contains(&a.id))
+            .count() as i32;
+        (item.open + opened).min(item.ranks)
+    }
+
+    /// Whether gear slot `k` is open.
+    pub fn slot_open(&self, content: &Content, k: usize) -> bool {
+        k < content.gear.slots.len()
+            && (k < content.gear.open_slots || !self.locked(content, "slot", &k.to_string()))
+    }
+
     // ---- loadout -------------------------------------------------------------
 
-    /// The stats this save brings into a run with a character: shop ranks,
-    /// equipped modules and the achievement XP bonus.
+    /// The pieces in a character's gear slots, by slot.
+    pub fn gear_of(&self, content: &Content, character: &str) -> Vec<Option<&Piece>> {
+        let list = self.equipped.get(character);
+        (0..content.gear.slots.len())
+            .map(|k| {
+                let uid = list.and_then(|l| l.get(k)).copied().unwrap_or(0);
+                if uid == 0 || !self.slot_open(content, k) {
+                    return None;
+                }
+                self.modules.iter().find(|m| m.uid == uid)
+            })
+            .collect()
+    }
+
+    /// The stats this save brings into a run with a character: outfitter
+    /// ranks, the character's gear, and banishes from achievements.
     pub fn loadout(&self, content: &Content, character: &str) -> Loadout {
         let mut stats = Stats::default();
         for item in &content.shop {
             let rank = self.ranks.get(&item.id).copied().unwrap_or(0);
             stats.add(&item.stat, item.per_rank * rank);
         }
-        for id in self.equipped.get(character).map(|v| v.as_slice()).unwrap_or(&[]) {
-            if let (Some(def), Some(own)) = (content.module(id), self.modules.iter().find(|m| &m.id == id)) {
-                stats.add(&def.stat, def.per_rank * own.rank);
+        for piece in self.gear_of(content, character).into_iter().flatten() {
+            if let Some(def) = content.module(&piece.id) {
+                stats.add(&def.stat, def.per_rank * piece.rank);
             }
         }
-        stats.xp_pct += content.achievement_xp_pct * self.claimed.len() as i32;
         for a in &content.achievements {
-            if self.claimed.contains(&a.id) {
-                stats.banishes += a.banishes;
+            if let Some(("banish", n)) = a.unlocks() {
+                if self.claimed.contains(&a.id) {
+                    stats.banishes += n.parse::<i32>().unwrap_or(0);
+                }
             }
         }
         let locked = content
-            .evolutions
+            .abilities
             .iter()
-            .filter(|e| !e.unlock_achievement.is_empty() && !self.claimed.contains(&e.unlock_achievement))
-            .map(|e| e.id.clone())
+            .filter(|a| self.locked(content, "ability", &a.id))
+            .chain(
+                content
+                    .evolutions
+                    .iter()
+                    .filter(|e| self.locked(content, "evolution", &e.id)),
+            )
+            .map(|a| a.id.clone())
             .collect();
         Loadout {
             character: character.to_string(),
@@ -182,6 +333,9 @@ impl Save {
     pub fn buy_rank(&mut self, content: &Content, id: &str) -> Result<(), &'static str> {
         let rank = self.ranks.get(id).copied().unwrap_or(0);
         let cost = Save::rank_cost(content, id, rank).ok_or("shop.maxed")?;
+        if rank >= self.rank_cap(content, id) {
+            return Err("shop.capped");
+        }
         if self.gold < cost {
             return Err("shop.short");
         }
@@ -207,29 +361,61 @@ impl Save {
 
     // ---- achievements --------------------------------------------------------
 
-    /// Progress toward an achievement, capped at its target.
+    fn met(&self, a: &Achievement) -> bool {
+        let v = self.stat(&a.stat);
+        if a.at_most {
+            v > 0 && v <= a.target
+        } else {
+            v >= a.target
+        }
+    }
+
+    /// Progress toward an achievement as (now, target). A fastest-time
+    /// achievement shows the best time so far.
     pub fn progress(&self, content: &Content, id: &str) -> (u64, u64) {
-        let Some(a) = content.achievements.iter().find(|a| a.id == id) else {
+        let Some(a) = content.achievement(id) else {
             return (0, 1);
         };
-        (self.stat(&a.stat).min(a.target), a.target)
+        let v = self.stat(&a.stat);
+        if a.at_most {
+            (v, a.target)
+        } else {
+            (v.min(a.target), a.target)
+        }
+    }
+
+    /// Whether the grid shows what an achievement asks: it is a starting
+    /// one, it is earned, or an earned one sits next to it (T4). Hidden
+    /// ones can still be earned.
+    pub fn visible(&self, content: &Content, id: &str) -> bool {
+        let Some(a) = content.achievement(id) else {
+            return false;
+        };
+        if a.start || self.claimed.contains(&a.id) {
+            return true;
+        }
+        content.achievements.iter().any(|b| {
+            let d = (b.at[0] - a.at[0]).abs() + (b.at[1] - a.at[1]).abs();
+            d == 1 && self.claimed.contains(&b.id)
+        })
     }
 
     /// Pays out every achievement whose target has been met and that has
-    /// not paid yet. Returns the ids paid now. Each pays once (I20).
+    /// not paid yet, seen or hidden. Returns the ids paid now. Each pays
+    /// once (I20).
     pub fn claim(&mut self, content: &Content) -> Vec<String> {
         let mut paid = Vec::new();
         for a in &content.achievements {
-            if self.claimed.contains(&a.id) || self.stat(&a.stat) < a.target {
+            if self.claimed.contains(&a.id) || !self.met(a) {
                 continue;
             }
             self.claimed.push(a.id.clone());
             self.gold += a.gold;
             self.tickets += a.tickets;
             paid.push(a.id.clone());
-            for c in &content.characters {
-                if c.unlock_achievement == a.id && !self.unlocked.contains(&c.id) {
-                    self.unlocked.push(c.id.clone());
+            if let Some(("character", id)) = a.unlocks() {
+                if !self.unlocked.iter().any(|u| u == id) {
+                    self.unlocked.push(id.to_string());
                 }
             }
         }
@@ -246,7 +432,7 @@ impl Save {
         let bosses = world.bosses_killed.len() as i32;
         let mut gold = p.record.gold
             + r.payout_per_minute * seconds / 60
-            + r.payout_per_ten_kills * p.record.kills as i32 / 10
+            + p.record.kills as i32 / r.kills_per_gold.max(1)
             + r.payout_boss * bosses;
         if won {
             gold += r.payout_win;
@@ -255,15 +441,40 @@ impl Save {
         self.gold += gold;
         self.tickets += tickets;
         let ch = content.characters[p.character].id.clone();
+        let tps = crate::geom::TPS;
+        let untouched = if p.record.first_hit == 0 {
+            seconds
+        } else {
+            p.record.first_hit / tps
+        };
+        let maxed = p
+            .abilities
+            .iter()
+            .filter(|s| content.is_evolution(&s.id) || s.level >= r.max_level)
+            .count();
+        let bare = self.gear_of(content, &ch).iter().all(|g| g.is_none());
         self.add_stat("runs", 1);
         self.add_stat("kills", p.record.kills as u64);
+        self.add_stat("time_s", seconds as u64);
+        self.add_stat("dashes", p.record.dashes as u64);
+        self.add_stat("revives", p.record.revives as u64);
         self.best_stat("best_kills", p.record.kills as u64);
         self.best_stat("best_time_s", seconds as u64);
         self.best_stat("best_level", world.level as u64);
+        self.best_stat("best_untouched_s", untouched as u64);
+        self.best_stat("best_gold_run", gold as u64);
+        self.best_stat("best_rifts", world.rifts_cleared as u64);
+        self.best_stat("best_evolutions", p.record.evolved.len() as u64);
+        self.best_stat("best_maxed", maxed as u64);
+        self.best_stat("best_full_slots", (p.abilities.len() + p.passives.len()) as u64);
+        self.low_stat("fastest_evolve_s", (p.record.first_evolve / tps) as u64);
         self.add_stat("rifts", world.rifts_cleared as u64);
         self.add_stat("evolutions", p.record.evolved.len() as u64);
         for (ability, n) in &p.record.kills_by {
             self.best_stat(&format!("best_kills.{ability}"), *n as u64);
+        }
+        for (enemy, n) in &p.record.kills_of {
+            self.add_stat(&format!("kills.{enemy}"), *n as u64);
         }
         for e in &p.record.evolved {
             self.add_stat(&format!("evolved.{e}"), 1);
@@ -272,10 +483,17 @@ impl Save {
             self.add_stat(&format!("boss.{b}"), 1);
         }
         if won {
+            self.add_stat("wins", 1);
             self.add_stat(&format!("won.{ch}"), 1);
+            if bare {
+                self.add_stat("won_bare", 1);
+            }
         }
         if world.coop {
             self.add_stat("coop_runs", 1);
+            if won {
+                self.add_stat("coop_wins", 1);
+            }
         }
         let achievements = self.claim(content);
         Payout {
@@ -313,6 +531,29 @@ impl Save {
         rolled
     }
 
+    fn add_piece(&mut self, id: &str, rank: i32) -> u32 {
+        let uid = self.next_uid.max(1);
+        self.next_uid = uid + 1;
+        self.modules.push(Piece {
+            uid,
+            id: id.to_string(),
+            rank,
+        });
+        uid
+    }
+
+    fn count_owned(&mut self) {
+        let mut ids: Vec<&str> = self.modules.iter().map(|m| m.id.as_str()).collect();
+        ids.sort();
+        ids.dedup();
+        let n = ids.len() as u64;
+        let best = self.modules.iter().map(|m| m.rank).max().unwrap_or(0) as u64;
+        self.best_stat("modules_owned", n);
+        self.best_stat("best_module_rank", best);
+    }
+
+    /// Pulls from the salvage cache. Every pull is a new piece at rank 1;
+    /// pieces rise in rank by merging (T8).
     pub fn pull(&mut self, content: &Content, count: i32) -> Result<Vec<Pull>, &'static str> {
         let cost = if count >= 10 {
             content.cache.ten_pull
@@ -343,24 +584,8 @@ impl Save {
                 .map(|m| m.id.as_str())
                 .collect();
             let id = pool[self.rng.below(pool.len() as u32) as usize].to_string();
-            let max = content.cache.max_rank;
-            let (rank, new) = match self.modules.iter_mut().find(|m| m.id == id) {
-                Some(m) => {
-                    m.rank = (m.rank + 1).min(max);
-                    (m.rank, false)
-                }
-                None => {
-                    self.modules.push(Owned {
-                        id: id.clone(),
-                        rank: 1,
-                    });
-                    (1, true)
-                }
-            };
-            if !new && rank == max {
-                // a duplicate of a finished module is returned as gold
-                self.gold += content.cache.duplicate_gold;
-            }
+            let new = !self.modules.iter().any(|m| m.id == id);
+            self.add_piece(&id, 1);
             self.add_stat("pulls", 1);
             if rarity == Rarity::Epic {
                 self.add_stat("epic_pulls", 1);
@@ -368,35 +593,187 @@ impl Save {
             out.push(Pull {
                 id,
                 rarity,
-                rank,
+                rank: 1,
                 new,
             });
         }
+        self.count_owned();
         self.claim(content);
         Ok(out)
     }
 
-    /// Puts a module in a character's slots, or takes it out if it is there.
-    pub fn toggle_module(
+    // ---- gear ------------------------------------------------------------------
+
+    pub fn piece(&self, uid: u32) -> Option<&Piece> {
+        self.modules.iter().find(|m| m.uid == uid)
+    }
+
+    /// The characters wearing a piece.
+    pub fn worn_by(&self, uid: u32) -> Vec<String> {
+        self.equipped
+            .iter()
+            .filter(|(_, l)| l.contains(&uid))
+            .map(|(c, _)| c.clone())
+            .collect()
+    }
+
+    /// Puts a piece in gear slot `k` of a character, in place of whatever
+    /// was there. The slot must be open and of the piece's kind.
+    pub fn equip(
         &mut self,
         content: &Content,
         character: &str,
-        id: &str,
+        k: usize,
+        uid: u32,
     ) -> Result<(), &'static str> {
-        if !self.modules.iter().any(|m| m.id == id) || content.character(character).is_none() {
-            return Err("cache.unknown");
+        let def = self
+            .piece(uid)
+            .and_then(|p| content.module(&p.id))
+            .ok_or("gear.unknown")?;
+        if content.character(character).is_none() || k >= content.gear.slots.len() {
+            return Err("gear.unknown");
         }
-        let slots = content.cache.slots;
+        if content.gear.slots[k] != def.slot {
+            return Err("gear.wrong_slot");
+        }
+        if !self.slot_open(content, k) {
+            return Err("gear.slot_locked");
+        }
+        let n = content.gear.slots.len();
         let list = self.equipped.entry(character.to_string()).or_default();
-        if let Some(k) = list.iter().position(|m| m == id) {
-            list.remove(k);
-            return Ok(());
+        list.resize(n, 0);
+        for u in list.iter_mut() {
+            if *u == uid {
+                *u = 0;
+            }
         }
-        if list.len() >= slots {
-            return Err("cache.full");
-        }
-        list.push(id.to_string());
+        list[k] = uid;
         Ok(())
+    }
+
+    /// Equips a piece in the first open slot of its kind, an empty one if
+    /// there is one.
+    pub fn equip_auto(&mut self, content: &Content, character: &str, uid: u32) -> Result<(), &'static str> {
+        let def = self
+            .piece(uid)
+            .and_then(|p| content.module(&p.id))
+            .ok_or("gear.unknown")?;
+        let gear = self.gear_of(content, character);
+        let fits: Vec<usize> = (0..content.gear.slots.len())
+            .filter(|&k| content.gear.slots[k] == def.slot && self.slot_open(content, k))
+            .collect();
+        let k = fits
+            .iter()
+            .copied()
+            .find(|&k| gear[k].is_none())
+            .or(fits.first().copied())
+            .ok_or("gear.slot_locked")?;
+        self.equip(content, character, k, uid)
+    }
+
+    pub fn unequip(&mut self, character: &str, uid: u32) {
+        if let Some(list) = self.equipped.get_mut(character) {
+            for u in list.iter_mut() {
+                if *u == uid {
+                    *u = 0;
+                }
+            }
+        }
+    }
+
+    fn remove_piece(&mut self, uid: u32) {
+        self.modules.retain(|m| m.uid != uid);
+        for list in self.equipped.values_mut() {
+            for u in list.iter_mut() {
+                if *u == uid {
+                    *u = 0;
+                }
+            }
+        }
+    }
+
+    /// The other pieces a merge into `uid` would use: the same module at
+    /// the same rank, unworn ones first.
+    pub fn merge_partners(&self, content: &Content, uid: u32) -> Vec<u32> {
+        let Some(me) = self.piece(uid) else {
+            return Vec::new();
+        };
+        let mut others: Vec<&Piece> = self
+            .modules
+            .iter()
+            .filter(|m| m.uid != uid && m.id == me.id && m.rank == me.rank)
+            .collect();
+        others.sort_by_key(|m| (!self.worn_by(m.uid).is_empty(), m.uid));
+        others
+            .into_iter()
+            .take(content.gear.merge_count - 1)
+            .map(|m| m.uid)
+            .collect()
+    }
+
+    /// Merges copies of a piece into it: `merge_count` of the same module at
+    /// the same rank become one, a rank higher, that stays where `uid` was
+    /// worn.
+    pub fn merge(&mut self, content: &Content, uid: u32) -> Result<(), &'static str> {
+        let me = self.piece(uid).ok_or("gear.unknown")?.clone();
+        if me.rank >= content.cache.max_rank {
+            return Err("gear.max_rank");
+        }
+        let partners = self.merge_partners(content, uid);
+        if partners.len() + 1 < content.gear.merge_count {
+            return Err("gear.no_pair");
+        }
+        for u in partners {
+            self.remove_piece(u);
+        }
+        if let Some(m) = self.modules.iter_mut().find(|m| m.uid == uid) {
+            m.rank += 1;
+        }
+        self.add_stat("merges", 1);
+        self.count_owned();
+        self.claim(content);
+        Ok(())
+    }
+
+    /// Merges every set that can merge, lowest ranks first, until none can.
+    /// Returns how many merges ran.
+    pub fn merge_all(&mut self, content: &Content) -> usize {
+        let mut n = 0;
+        loop {
+            let mut order: Vec<&Piece> = self.modules.iter().collect();
+            // a worn piece survives its merge, so it goes first
+            order.sort_by_key(|m| (m.rank, self.worn_by(m.uid).is_empty(), m.uid));
+            let next = order.iter().map(|m| m.uid).find(|&u| {
+                self.piece(u)
+                    .map(|p| p.rank < content.cache.max_rank)
+                    .unwrap_or(false)
+                    && self.merge_partners(content, u).len() + 1 >= content.gear.merge_count
+            });
+            match next {
+                Some(u) if self.merge(content, u).is_ok() => n += 1,
+                _ => return n,
+            }
+        }
+    }
+
+    /// Scraps an unworn piece for gold: the rarity's price at rank 1,
+    /// doubled for each rank above it.
+    pub fn scrap(&mut self, content: &Content, uid: u32) -> Result<i32, &'static str> {
+        let me = self.piece(uid).ok_or("gear.unknown")?.clone();
+        if !self.worn_by(uid).is_empty() {
+            return Err("gear.worn");
+        }
+        let def = content.module(&me.id).ok_or("gear.unknown")?;
+        let g = &content.gear;
+        let base = match def.rarity {
+            Rarity::Common => g.scrap_common,
+            Rarity::Rare => g.scrap_rare,
+            Rarity::Epic => g.scrap_epic,
+        };
+        let gold = base << (me.rank - 1).clamp(0, 16);
+        self.remove_piece(uid);
+        self.gold += gold;
+        Ok(gold)
     }
 }
 
@@ -405,12 +782,17 @@ mod tests {
     use super::*;
     use crate::content::shipped;
 
+    fn piece(s: &mut Save, id: &str, rank: i32) -> u32 {
+        s.add_piece(id, rank)
+    }
+
     #[test]
     fn a_save_round_trips() {
         let c = shipped();
         let mut s = Save::new(&c, 7);
         s.gold = 321;
         s.stats.insert("kills".into(), 44);
+        piece(&mut s, "kinetic_core", 2);
         let back = Save::from_json(&c, &s.to_json()).unwrap();
         assert_eq!(back, s);
     }
@@ -425,25 +807,83 @@ mod tests {
         assert_eq!(Save::from_json(&c, "nonsense"), Err("save.not_json"));
         let later = Save::new(&c, 1)
             .to_json()
-            .replace("\"version\": 1", "\"version\": 9");
+            .replace("\"version\": 2", "\"version\": 9");
+        assert!(later.contains("\"version\": 9"), "the edit matched");
         assert_eq!(Save::from_json(&c, &later), Err("save.wrong_version"));
     }
 
+    /// A version 1 file from the first build: one kinetic core at rank 2
+    /// worn by Pathfinder, two plating ranks, and a module that no longer
+    /// exists.
     #[test]
-    fn achievements_are_listed_before_they_are_earned_and_pay_once() {
+    fn a_version_1_save_is_brought_up_to_date() {
+        let c = shipped();
+        let v1 = r#"{"format": "galactic-survivors-save", "version": 1, "gold": 5, "tickets": 3,
+            "ranks": {"plating_rank": 2}, "unlocked": ["pathfinder"], "stats": {},
+            "claimed": ["not_an_achievement"],
+            "modules": [{"id": "kinetic_core", "rank": 2}, {"id": "gone_mod", "rank": 1}],
+            "equipped": {"pathfinder": ["kinetic_core"]}, "pity_rare": 4, "pity_epic": 4,
+            "rng": {"state": 99}, "settings": {"autoaim": true, "reduced_motion": false, "damage_numbers": false},
+            "character": "pathfinder"}"#;
+        let s = Save::from_json(&c, v1).unwrap();
+        assert_eq!(s.version, 2);
+        // plating ranks refunded at today's prices: 120 for rank 1, 240 for rank 2
+        assert!(s.ranks.is_empty());
+        assert_eq!(s.gold, 5 + 120 + 240);
+        assert_eq!(s.modules.len(), 1);
+        assert_eq!((s.modules[0].id.as_str(), s.modules[0].rank), ("kinetic_core", 2));
+        // the core slot is slot 0
+        assert_eq!(s.equipped["pathfinder"][0], s.modules[0].uid);
+        assert!(s.claimed.is_empty());
+        assert_eq!(s.tickets, 3);
+        // kinetic core: 3% a rank
+        assert_eq!(s.loadout(&c, "pathfinder").stats.damage_pct, 6);
+    }
+
+    #[test]
+    fn the_grid_shows_starting_achievements_and_the_neighbours_of_earned_ones() {
         let c = shipped();
         let mut s = Save::new(&c, 1);
-        // every achievement has visible progress from the first launch
-        for a in &c.achievements {
-            assert_eq!(s.progress(&c, &a.id), (0, a.target));
-        }
-        s.stats.insert("kills".into(), 1000);
-        let paid = s.claim(&c);
-        assert_eq!(paid, vec!["exterminator".to_string()]);
-        // exterminator pays 150 gold and 1 ticket in content.json
-        assert_eq!((s.gold, s.tickets), (150, 1));
+        // first_steps starts visible at (3, 3); half_way is two cells left
+        // at (1, 3), veteran between them at (2, 3)
+        assert!(s.visible(&c, "first_steps"));
+        assert!(!s.visible(&c, "veteran"));
+        assert!(!s.visible(&c, "half_way"));
+        s.stats.insert("best_time_s".into(), 180);
+        s.claim(&c);
+        assert!(s.visible(&c, "veteran"));
+        assert!(!s.visible(&c, "half_way"));
+    }
+
+    #[test]
+    fn a_hidden_achievement_is_earned_all_the_same() {
+        let c = shipped();
+        let mut s = Save::new(&c, 1);
+        assert!(!s.visible(&c, "marathon"));
+        s.stats.insert("time_s".into(), 7200);
+        assert_eq!(s.claim(&c), vec!["marathon".to_string()]);
+        assert!(s.visible(&c, "marathon"));
+        // marathon pays 250 gold and 3 tickets in content.json
+        assert_eq!((s.gold, s.tickets), (250, 3));
         assert!(s.claim(&c).is_empty());
-        assert_eq!(s.gold, 150);
+    }
+
+    #[test]
+    fn a_fastest_time_achievement_needs_a_time_at_or_under_its_target() {
+        let c = shipped();
+        let mut s = Save::new(&c, 1);
+        s.claim(&c);
+        assert!(
+            !s.claimed.contains(&"quick_study".to_string()),
+            "never evolved is not fast"
+        );
+        s.low_stat("fastest_evolve_s", 250);
+        s.low_stat("fastest_evolve_s", 400);
+        assert_eq!(s.stat("fastest_evolve_s"), 250);
+        s.claim(&c);
+        // quick_study: 300 s or less; prodigy: 210 s or less
+        assert!(s.claimed.contains(&"quick_study".to_string()));
+        assert!(!s.claimed.contains(&"prodigy".to_string()));
     }
 
     #[test]
@@ -457,39 +897,68 @@ mod tests {
     }
 
     #[test]
-    fn each_claimed_achievement_adds_one_percent_xp() {
+    fn locked_abilities_and_evolutions_stay_out_until_their_achievement() {
         let c = shipped();
         let mut s = Save::new(&c, 1);
-        s.claimed = vec!["first_steps".into(), "exterminator".into()];
-        assert_eq!(s.loadout(&c, "pathfinder").stats.xp_pct, 2);
-    }
-
-    #[test]
-    fn storm_lattice_stays_locked_until_lightning_rod() {
-        let c = shipped();
-        let mut s = Save::new(&c, 1);
-        assert_eq!(
-            s.loadout(&c, "pathfinder").locked,
-            vec!["storm_lattice".to_string()]
-        );
+        let locked = s.loadout(&c, "pathfinder").locked;
+        for id in ["mortar", "missiles", "cryo_burst", "sentry", "storm_lattice"] {
+            assert!(locked.contains(&id.to_string()), "{id}");
+        }
+        assert!(!locked.contains(&"chain_arc".to_string()));
         s.claimed.push("lightning_rod".into());
-        assert!(s.loadout(&c, "pathfinder").locked.is_empty());
+        s.claimed.push("rift_runner".into());
+        let locked = s.loadout(&c, "pathfinder").locked;
+        assert!(!locked.contains(&"storm_lattice".to_string()));
+        assert!(!locked.contains(&"mortar".to_string()));
+        assert!(locked.contains(&"sentry".to_string()));
     }
 
     #[test]
-    fn ranks_cost_more_each_time_and_stop_at_the_cap() {
+    fn first_evolution_adds_a_banish() {
+        let c = shipped();
+        let mut s = Save::new(&c, 1);
+        assert_eq!(s.loadout(&c, "pathfinder").stats.banishes, 0);
+        s.claimed.push("first_evolution".into());
+        assert_eq!(s.loadout(&c, "pathfinder").stats.banishes, 1);
+    }
+
+    #[test]
+    fn achievements_no_longer_add_xp() {
+        let c = shipped();
+        let mut s = Save::new(&c, 1);
+        s.claimed = c.achievements.iter().map(|a| a.id.clone()).collect();
+        assert_eq!(s.loadout(&c, "pathfinder").stats.xp_pct, 0);
+    }
+
+    #[test]
+    fn outfitter_ranks_stop_at_the_cap_until_an_achievement_opens_more() {
         let c = shipped();
         let mut s = Save::new(&c, 1);
         s.gold = 10_000;
-        // revive_rank: one rank at 500
-        s.buy_rank(&c, "revive_rank").unwrap();
-        assert_eq!(s.gold, 9_500);
-        assert_eq!(s.buy_rank(&c, "revive_rank"), Err("shop.maxed"));
-        // plating_rank: 80, then 140
+        // plating_rank: 1 rank open; 120 gold, then 240
         s.buy_rank(&c, "plating_rank").unwrap();
+        assert_eq!(s.gold, 10_000 - 120);
+        assert_eq!(s.buy_rank(&c, "plating_rank"), Err("shop.capped"));
+        // shell_rank: none open at the start
+        assert_eq!(s.buy_rank(&c, "shell_rank"), Err("shop.capped"));
+        // first_steps opens a second plating rank
+        s.stats.insert("best_time_s".into(), 180);
+        s.claim(&c);
+        let gold = s.gold;
         s.buy_rank(&c, "plating_rank").unwrap();
-        assert_eq!(s.gold, 9_500 - 80 - 140);
+        assert_eq!(s.gold, gold - 240);
         assert_eq!(s.loadout(&c, "pathfinder").stats.max_hp, 20);
+        assert_eq!(s.rank_cap(&c, "plating_rank"), 2);
+    }
+
+    #[test]
+    fn every_outfitter_rank_can_be_opened_by_some_achievement() {
+        let c = shipped();
+        let mut s = Save::new(&c, 1);
+        s.claimed = c.achievements.iter().map(|a| a.id.clone()).collect();
+        for item in &c.shop {
+            assert_eq!(s.rank_cap(&c, &item.id), item.ranks, "{}", item.id);
+        }
     }
 
     #[test]
@@ -501,24 +970,16 @@ mod tests {
             let pulls = s.pull(&c, 10).unwrap();
             assert_eq!(pulls.len(), 10);
             assert!(pulls.iter().any(|p| p.rarity >= Rarity::Rare), "seed {seed}");
-            assert_eq!(s.tickets, 0);
+            // ten tickets spent; only achievements earned by the pull pay any back
+            let back: i32 = c
+                .achievements
+                .iter()
+                .filter(|a| s.claimed.contains(&a.id))
+                .map(|a| a.tickets)
+                .sum();
+            assert_eq!(s.tickets, back);
+            assert_eq!(s.modules.len(), 10, "every pull is its own piece");
         }
-    }
-
-    #[test]
-    fn a_duplicate_raises_rank_up_to_the_cap() {
-        let c = shipped();
-        let mut s = Save::new(&c, 3);
-        s.tickets = 400;
-        s.pull(&c, 10).unwrap();
-        for _ in 0..30 {
-            s.pull(&c, 10).unwrap();
-        }
-        assert!(s
-            .modules
-            .iter()
-            .all(|m| m.rank >= 1 && m.rank <= c.cache.max_rank));
-        assert!(s.modules.iter().any(|m| m.rank == c.cache.max_rank));
     }
 
     #[test]
@@ -529,21 +990,88 @@ mod tests {
     }
 
     #[test]
-    fn modules_fill_two_slots_and_count_in_the_loadout() {
+    fn two_copies_at_one_rank_merge_into_one_a_rank_higher() {
         let c = shipped();
         let mut s = Save::new(&c, 3);
-        for id in ["kinetic_core", "plating_mod", "magnet_mod"] {
-            s.modules.push(Owned {
-                id: id.into(),
-                rank: 2,
-            });
-        }
-        s.toggle_module(&c, "pathfinder", "kinetic_core").unwrap();
-        s.toggle_module(&c, "pathfinder", "plating_mod").unwrap();
-        assert_eq!(s.toggle_module(&c, "pathfinder", "magnet_mod"), Err("cache.full"));
+        // the rank 2 copy comes before the second rank 1 copy, so a merge
+        // that ignored rank would take it first
+        let a = piece(&mut s, "kinetic_core", 1);
+        let odd = piece(&mut s, "kinetic_core", 2);
+        let b = piece(&mut s, "kinetic_core", 1);
+        let other = piece(&mut s, "coolant_mod", 1);
+        s.merge(&c, a).unwrap();
+        assert_eq!(s.piece(a).unwrap().rank, 2);
+        assert!(s.piece(b).is_none(), "the copy was used up");
+        assert!(s.piece(odd).is_some() && s.piece(other).is_some());
+        // a lone coolant mod has nothing to merge with
+        assert_eq!(s.merge(&c, other), Err("gear.no_pair"));
+        // the two rank 2 kinetic cores make rank 3
+        s.merge(&c, a).unwrap();
+        assert_eq!(s.piece(a).unwrap().rank, 3);
+        assert_eq!(s.modules.len(), 2);
+        assert_eq!(s.stat("merges"), 2);
+    }
+
+    #[test]
+    fn a_piece_at_the_highest_rank_does_not_merge() {
+        let c = shipped();
+        let mut s = Save::new(&c, 3);
+        let a = piece(&mut s, "kinetic_core", c.cache.max_rank);
+        piece(&mut s, "kinetic_core", c.cache.max_rank);
+        assert_eq!(s.merge(&c, a), Err("gear.max_rank"));
+    }
+
+    #[test]
+    fn merge_all_merges_upward_and_keeps_the_worn_piece() {
+        let c = shipped();
+        let mut s = Save::new(&c, 3);
+        let ids: Vec<u32> = (0..4).map(|_| piece(&mut s, "plating_mod", 1)).collect();
+        // wear the last one: plating_mod fits the frame slot, slot 1
+        s.equip(&c, "pathfinder", 1, ids[3]).unwrap();
+        // four rank 1 become two rank 2, then one rank 3
+        assert_eq!(s.merge_all(&c), 3);
+        assert_eq!(s.modules.len(), 1);
+        assert_eq!(s.modules[0].uid, ids[3]);
+        assert_eq!(s.modules[0].rank, 3);
+        assert_eq!(s.equipped["pathfinder"][1], ids[3]);
+    }
+
+    #[test]
+    fn gear_goes_only_in_open_slots_of_its_kind_and_counts_per_character() {
+        let c = shipped();
+        let mut s = Save::new(&c, 3);
+        let core = piece(&mut s, "kinetic_core", 2);
+        let frame = piece(&mut s, "plating_mod", 2);
+        let util = piece(&mut s, "magnet_mod", 1);
+        // slots: 0 core, 1 frame, 2 and 3 utility; 2 and 3 start locked
+        assert_eq!(s.equip(&c, "pathfinder", 1, core), Err("gear.wrong_slot"));
+        s.equip(&c, "pathfinder", 0, core).unwrap();
+        s.equip_auto(&c, "pathfinder", frame).unwrap();
+        assert_eq!(s.equip(&c, "pathfinder", 2, util), Err("gear.slot_locked"));
+        assert_eq!(s.equip_auto(&c, "pathfinder", util), Err("gear.slot_locked"));
+        s.claimed.push("long_haul".into());
+        s.equip_auto(&c, "pathfinder", util).unwrap();
+        assert_eq!(s.equipped["pathfinder"], vec![core, frame, util, 0]);
         let l = s.loadout(&c, "pathfinder");
-        // kinetic_core 3% a rank, plating_mod 8 a rank, at rank 2
-        assert_eq!((l.stats.damage_pct, l.stats.max_hp), (6, 16));
+        // kinetic_core 3% a rank, plating_mod 8 a rank, magnet_mod 10% a rank
+        assert_eq!(
+            (l.stats.damage_pct, l.stats.max_hp, l.stats.pickup_pct),
+            (6, 16, 10)
+        );
         assert_eq!(s.loadout(&c, "breaker").stats.damage_pct, 0);
+    }
+
+    #[test]
+    fn scrapping_pays_by_rarity_and_rank_and_spares_worn_gear() {
+        let c = shipped();
+        let mut s = Save::new(&c, 3);
+        let a = piece(&mut s, "kinetic_core", 2);
+        let b = piece(&mut s, "aegis_core", 1);
+        s.equip(&c, "pathfinder", 1, b).unwrap();
+        assert_eq!(s.scrap(&c, b), Err("gear.worn"));
+        // common: 10 gold at rank 1, doubled once for rank 2
+        assert_eq!(s.scrap(&c, a), Ok(20));
+        assert_eq!(s.gold, 20);
+        assert!(s.piece(a).is_none());
     }
 }

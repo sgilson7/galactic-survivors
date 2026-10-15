@@ -37,7 +37,7 @@ impl World {
                     .iter()
                     .any(|c| c.starter == a.id && c.id != ch.id);
                 let allowed = (a.owner.is_empty() || a.owner == ch.id) && !starter_of_other;
-                if !owned && allowed && !p.banished.contains(&a.id) {
+                if !owned && allowed && !p.banished.contains(&a.id) && !p.load.locked.contains(&a.id) {
                     pool.push(Card {
                         kind: CardKind::NewAbility,
                         id: a.id.clone(),

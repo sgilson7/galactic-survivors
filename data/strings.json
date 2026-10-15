@@ -7,23 +7,63 @@
     "failed": "The game could not start: {why}"
   },
   "screen": {
-    "title": {"title": "Galactic Survivors", "subtitle": "Land, survive the planet's waves for twelve minutes, and bring back what you salvage."},
-    "hangar": {"title": "Hangar", "subtitle": "Choose who lands and which modules they carry."},
-    "shop": {"title": "Outfitter", "subtitle": "Permanent upgrades, paid for in gold you keep from every run."},
-    "cache": {"title": "Salvage cache", "subtitle": "Spend salvage tickets to pull modules from the wreckage."},
-    "achievements": {"title": "Achievements", "subtitle": "Every goal is listed from the start, with your progress toward it."},
-    "settings": {"title": "Settings", "subtitle": "How the game aims and moves on your screen."},
-    "coop": {"title": "Co-op", "subtitle": "Two players, one run, connected browser to browser."},
-    "run": {"title": "", "subtitle": ""},
-    "results": {"title": "Run over", "subtitle": ""},
-    "help": {"title": "How to play", "subtitle": "You steer. Your abilities fire on their own."}
+    "title": {
+      "title": "Galactic Survivors",
+      "subtitle": "Land, survive the planet's waves for twelve minutes, and bring back what you salvage."
+    },
+    "hangar": {
+      "title": "Hangar",
+      "subtitle": "Choose who lands and which modules they carry."
+    },
+    "shop": {
+      "title": "Outfitter",
+      "subtitle": "Permanent upgrades, paid for in gold you keep from every run."
+    },
+    "cache": {
+      "title": "Salvage cache",
+      "subtitle": "Spend salvage tickets to pull modules from the wreckage."
+    },
+    "achievements": {
+      "title": "Achievements",
+      "subtitle": "Earning an achievement shows the ones next to it. Hidden ones can still be earned."
+    },
+    "settings": {
+      "title": "Settings",
+      "subtitle": "How the game aims and moves on your screen."
+    },
+    "coop": {
+      "title": "Co-op",
+      "subtitle": "Two players, one run, connected browser to browser."
+    },
+    "run": {
+      "title": "",
+      "subtitle": ""
+    },
+    "results": {
+      "title": "Run over",
+      "subtitle": ""
+    },
+    "help": {
+      "title": "How to play",
+      "subtitle": "You steer. Your abilities fire on their own."
+    },
+    "gear": {
+      "title": "Gear",
+      "subtitle": "Equip the modules you pulled, merge copies, and scrap what you don't need."
+    },
+    "codex": {
+      "title": "Codex",
+      "subtitle": "Every ability, passive and evolution, and how they fit together."
+    }
   },
   "menu": {
     "solo": "Play solo",
     "coop": "Play co-op",
+    "gear": "Gear",
     "shop": "Outfitter",
     "cache": "Salvage cache",
     "achievements": "Achievements",
+    "codex": "Codex",
     "settings": "Settings",
     "help": "How to play",
     "back": "Back"
@@ -44,27 +84,23 @@
   "key": {
     "enter": "Enter",
     "reroll": "R",
-    "pause": "Esc"
+    "pause": "Esc",
+    "inspect": "I"
   },
   "hangar": {
     "heading": "Characters",
     "pick": "Choose",
     "chosen": "Chosen",
     "buy": "Unlock for {gold} gold",
-    "unlock_by": "Unlocked by the achievement {name}.",
     "locked": "That character is still locked. Unlock it in the hangar first.",
     "stats": "Health {hp}, speed {speed}. Starts with {starter}.",
-    "modules": "Modules for {name}: {n} of {max} slots in use",
-    "no_modules": "No modules yet. Pull them from the salvage cache with tickets earned in runs.",
-    "equip": "Equip",
-    "unequip": "Remove",
     "launch": "Land"
   },
   "shop": {
-    "explain": "Each rank is permanent and applies to every character.",
+    "explain": "Each rank is permanent and applies to every character. Most ranks start locked; achievements open them one at a time.",
     "buy": "Buy for {gold} gold",
     "maxed": "All ranks bought",
-    "rank": "Rank {n} of {max}",
+    "rank": "Rank {n} of {max} ({open} for sale)",
     "short": "Not enough gold yet. Gold from your next run will count toward it.",
     "unknown": "That item is not for sale.",
     "about": {
@@ -76,22 +112,26 @@
       "reroll_rank": "Each rank adds {n} reroll to every run.",
       "banish_rank": "Each rank adds {n} banish to every run.",
       "revive_rank": "Get back up once a run, at half health."
-    }
+    },
+    "capped_label": "Locked",
+    "capped": "That rank is locked. An achievement opens it."
   },
   "cache": {
-    "explain": "Odds per pull: common {common}%, rare {rare}%, epic {epic}%. A rare or better is certain within {ten} pulls; the next one is certain in {n}. A module you already own goes up a rank.",
+    "explain": "Odds per pull: common {common}%, rare {rare}%, epic {epic}%. A rare or better is certain within {ten} pulls; the next one is certain in {n}. Every pull is a new piece. Merge copies in the gear window to raise their rank.",
     "pull_one": "Pull once ({n} ticket)",
     "pull_ten": "Pull ten ({n} tickets)",
     "result": "Pulled",
     "skip": "Show all",
     "new": "New",
     "rank": "Rank {n} of {max}",
-    "to_hangar": "Equip in the hangar",
-    "short": "Not enough tickets. Bosses, rifts and achievements give them.",
-    "unknown": "You do not own that module.",
-    "full": "Both slots are in use. Remove a module first."
+    "to_hangar": "Open the gear window",
+    "short": "Not enough tickets. Bosses, rifts and achievements give them."
   },
-  "rarity": {"common": "Common", "rare": "Rare", "epic": "Epic"},
+  "rarity": {
+    "common": "Common",
+    "rare": "Rare",
+    "epic": "Epic"
+  },
   "module": {
     "kinetic_core": "{n}% more damage.",
     "coolant_mod": "Abilities recharge {n}% faster.",
@@ -101,23 +141,26 @@
     "overclock": "Your starting ability begins {n} levels higher.",
     "field_lens": "Areas are {n}% larger.",
     "spare_reroll": "{n} more rerolls each run.",
-    "shield_charge": "A shield blocks one hit, then recharges; each rank shortens the recharge by {n} seconds.",
+    "shield_charge": "A shield blocks one hit, then recharges. The recharge is {n} seconds shorter.",
     "split_chamber": "{n} more projectiles on every ability that fires them.",
     "aegis_core": "{n} more armor.",
     "rift_key": "{n} more salvage tickets from each rift you clear."
   },
   "ach": {
     "count": "{n} of {max} earned",
-    "explain": "Each achievement pays gold and adds a permanent XP bonus to every run. Some also unlock something.",
+    "explain": "Achievements pay gold and tickets, and many open outfitter ranks, gear slots, abilities or characters. Choose a tile to see its goal.",
     "progress": "Progress {now} / {target}.",
-    "reward": "{gold} gold, +{xp}% XP.",
-    "tickets": "{n} tickets.",
+    "reward": "Gold: {gold}.",
+    "tickets": "Tickets: {n}.",
     "unlock": {
-      "burrower_down": "Unlocks Vector.",
-      "lightning_rod": "Unlocks the Storm Lattice evolution.",
-      "first_evolution": "Adds one banish to every run."
+      "character": "Unlocks {name}.",
+      "ability": "Adds {name} to the level-up cards.",
+      "evolution": "Unlocks the {name} evolution.",
+      "rank": "Opens one more rank of {name} in the outfitter.",
+      "slot": "Opens a {name} in the gear window.",
+      "banish": "Adds {name} banish to every run."
     },
-    "first_steps": "Survive {n} seconds in one run.",
+    "first_steps": "Survive {n} in one run.",
     "exterminator": "Defeat {n} enemies in total.",
     "swarm_breaker": "Defeat {n} enemies in one run.",
     "lightning_rod": "Defeat {n} enemies with Chain Arc in one run.",
@@ -136,7 +179,48 @@
     "veteran": "Reach level {n} in one run.",
     "epic_find": "Pull an epic module.",
     "outfitter": "Buy {n} outfitter ranks.",
-    "survivor": "Finish {n} runs."
+    "survivor": "Finish {n} runs.",
+    "best": "Your best: {now}.",
+    "best_none": "Not done yet.",
+    "hidden_title": "?",
+    "hidden_about": "Hidden. Earn an achievement next to this one to see what it asks. You can still earn it before you see it.",
+    "choose": "Choose a tile to see its goal and reward.",
+    "half_way": "Survive {n} in one run.",
+    "skitter_bane": "Defeat {n} Skitters in total.",
+    "spitter_silencer": "Defeat {n} Spitters in total.",
+    "decimator": "Defeat {n} enemies in total.",
+    "long_haul": "Survive {n} in one run.",
+    "twin_evolution": "Evolve {n} abilities in one run.",
+    "stalker_hunter": "Defeat {n} Stalkers in total.",
+    "rift_diver": "Clear all {n} rifts in one run.",
+    "carapace_cracker": "Defeat {n} Carapaces in total.",
+    "burrower_x5": "Defeat the Burrower {n} times.",
+    "untouchable": "Go {n} from the start of a run without taking a hit.",
+    "field_medic": "Revive your co-op partner {n} times in total.",
+    "all_wins": "Win {n} runs.",
+    "marathon": "Play for {n} in total.",
+    "ghost_walk": "Go {n} from the start of a run without taking a hit.",
+    "prodigy": "Evolve an ability within {n} of a run's start.",
+    "quick_study": "Evolve an ability within {n} of a run's start.",
+    "triple_evolution": "Evolve {n} abilities in one run.",
+    "storm_called": "Evolve Chain Arc into the Storm Lattice.",
+    "halo_lit": "Evolve Orbit Drones into the Halo Guard.",
+    "mastery": "Finish a run with {n} abilities at their highest level or evolved.",
+    "full_kit": "Fill all {n} ability and passive slots in one run.",
+    "pulse_master": "Defeat {n} enemies with Pulse Field in one run.",
+    "annihilator": "Defeat {n} enemies in total.",
+    "swarm_crusher": "Defeat {n} enemies in one run.",
+    "masterwork": "Raise a module to rank {n}.",
+    "collector": "Own all {n} kinds of module.",
+    "merger": "Merge modules {n} times.",
+    "wealthy": "Earn {n} gold in one run.",
+    "outfitted_full": "Buy all {n} outfitter ranks.",
+    "corporate_downsizing": "Defeat {n} corporate troopers in total.",
+    "squad_win": "Win a co-op run.",
+    "bare_hands": "Win a run with no gear equipped.",
+    "veteran_40": "Reach level {n} in one run.",
+    "vector_dashes": "Dash {n} times in total.",
+    "rift_veteran": "Clear {n} rifts in total."
   },
   "settings": {
     "on": "On",
@@ -160,7 +244,7 @@
     "cards": "Level-up cards",
     "cards.about": "Press 1, 2 or 3, or click a card. R draws a new hand.",
     "pause": "Pause",
-    "pause.about": "Esc or P, in a solo run."
+    "pause.about": "Esc or P pauses a solo run and shows your build. In co-op, I shows your build without pausing."
   },
   "coop": {
     "heading": "Play together",
@@ -197,9 +281,11 @@
     "signal_failed": "Setting up the connection failed. Try again.",
     "bad_code": "That is not a room code. Codes are four to eight letters or digits."
   },
-  "run": {"busy": "Finish or leave the run first."},
+  "run": {
+    "busy": "Finish or leave the run first."
+  },
   "pause": {
-    "heading": "Paused",
+    "heading": "Paused: your build",
     "resume": "Resume",
     "quit": "End run and keep rewards",
     "button": "Pause"
@@ -220,7 +306,6 @@
     "evolve": "Evolve",
     "stats": "Damage {damage}, every {cd} s.",
     "count": "{n} at once.",
-    "evolves": "At its highest level, with {partner}, the next supply cache evolves it into {into}.",
     "partner_of": "Evolves: {names}.",
     "gold": "Gold",
     "gold.about": "Nothing left to learn, so take some gold instead.",
@@ -229,7 +314,10 @@
     "salvage": "Salvage",
     "salvage.about": "Take {n} gold."
   },
-  "build": {"evolved": "Evolved"},
+  "build": {
+    "evolved": "Evolved",
+    "ready": "Ready to evolve"
+  },
   "results": {
     "won": "The Matriarch is down",
     "lost": "Run over",
@@ -262,7 +350,10 @@
     "seat": "P{n}",
     "level": "Level {n}",
     "kills": "{n} defeated",
-    "rift": "Rift closes in {t} s"
+    "rift": "Rift closes in {t} s",
+    "dash_ready": "Dash ready (Space)",
+    "dash_wait": "Dash recharging",
+    "dash_prompt": "Press Space to dash through danger"
   },
   "about": {
     "pathfinder": "A balanced explorer whose shoulder drone aims for you, and who fires an extra shot at levels ten and twenty.",
@@ -382,6 +473,112 @@
     "veteran": "Veteran",
     "epic_find": "Epic find",
     "outfitter": "Outfitted",
-    "survivor": "Survivor"
+    "survivor": "Survivor",
+    "half_way": "Halfway there",
+    "skitter_bane": "Skitter bane",
+    "spitter_silencer": "Spitter silencer",
+    "decimator": "Decimator",
+    "long_haul": "Long haul",
+    "twin_evolution": "Twin evolution",
+    "stalker_hunter": "Stalker hunter",
+    "rift_diver": "Rift diver",
+    "carapace_cracker": "Shell cracker",
+    "burrower_x5": "Burrower hunter",
+    "untouchable": "Untouchable",
+    "field_medic": "Field medic",
+    "all_wins": "Ten landings",
+    "marathon": "Marathon",
+    "ghost_walk": "Ghost walk",
+    "prodigy": "Prodigy",
+    "quick_study": "Quick study",
+    "triple_evolution": "Triple evolution",
+    "storm_called": "Storm called",
+    "halo_lit": "Halo lit",
+    "mastery": "Mastery",
+    "full_kit": "Full kit",
+    "pulse_master": "Pulse master",
+    "annihilator": "Annihilator",
+    "swarm_crusher": "Swarm crusher",
+    "masterwork": "Masterwork",
+    "collector": "Collector",
+    "merger": "Merger",
+    "wealthy": "Payday",
+    "outfitted_full": "Fully outfitted",
+    "corporate_downsizing": "Hostile takeover",
+    "squad_win": "Squad victory",
+    "bare_hands": "Bare hands",
+    "veteran_40": "Elite",
+    "vector_dashes": "Blink",
+    "rift_veteran": "Rift veteran"
+  },
+  "lock": {
+    "by": "Opened by the achievement {name}.",
+    "hidden": "Opened by an achievement you haven't found yet."
+  },
+  "gear": {
+    "heading": "{name}'s gear",
+    "open": "Open the gear window",
+    "to_hangar": "Hangar",
+    "none_worn": "Nothing equipped yet.",
+    "locked": "Locked",
+    "empty_slot": "Empty",
+    "slot": {
+      "core": "Core slot",
+      "frame": "Frame slot",
+      "utility": "Utility slot"
+    },
+    "rank_short": "R{n}",
+    "rank": "Rank {n} of {max}.",
+    "next": "Next rank: {effect}",
+    "copies": "Other copies at this rank: {n}. A merge needs {need}.",
+    "inventory": "Stash: {n} pieces",
+    "empty": "Your stash is empty. Pull modules from the salvage cache with tickets.",
+    "merge_rule": "{n} copies of a module at the same rank merge into one piece a rank higher.",
+    "merge_all": "Merge everything that can merge",
+    "choose": "Choose a piece or a slot to see it here.",
+    "worn_by": "Equipped on {names}.",
+    "worn_badge": "On",
+    "equip": "Equip",
+    "unequip": "Take off",
+    "merge": "Merge",
+    "scrap": "Scrap for {gold} gold",
+    "unknown": "That piece isn't in your stash.",
+    "wrong_slot": "That piece doesn't fit that slot.",
+    "slot_locked": "Every slot that piece fits is still locked. An achievement opens it.",
+    "no_pair": "You need another copy of this module at the same rank to merge.",
+    "max_rank": "This piece is already at the highest rank.",
+    "worn": "Take the piece off first, then scrap it."
+  },
+  "codex": {
+    "heading": "Codex",
+    "explain": "Numbers are at level 1 and at the highest level, before passives, outfitter ranks and gear.",
+    "level": "Level {n}: {damage} damage every {cd} s.",
+    "max_level": "Up to level {n}.",
+    "locked": "Locked",
+    "starter": "{name}'s starter",
+    "only": "{name} only",
+    "tab": {
+      "abilities": "Abilities",
+      "passives": "Passives",
+      "evolutions": "Evolutions"
+    },
+    "back": "Back to your build"
+  },
+  "recipe": {
+    "need": "Evolves into {into} at level {max} once {partner} is level {plevel} or higher.",
+    "from": "Made from {from} at level {max} with {partner} at level {plevel} or higher.",
+    "none": "Doesn't evolve.",
+    "partner_of": "At level {plevel} or higher, with {ability} at its highest level, evolves it into {into}.",
+    "ready": "Ready: your next level-up offers {into}.",
+    "level_now": "Now level {n} of {max}.",
+    "holding": "{partner} is level {n}.",
+    "missing": "You don't hold {partner} yet."
+  },
+  "inspect": {
+    "heading": "Your build",
+    "explain": "What each ability does now, and what it needs to evolve.",
+    "close": "Close",
+    "codex": "Codex",
+    "button": "Build"
   }
 }

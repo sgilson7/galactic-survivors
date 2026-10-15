@@ -29,6 +29,9 @@ pub struct RunRules {
     pub ability_slots: usize,
     pub passive_slots: usize,
     pub max_level: i32,
+    /// The level the partner passive must reach before an ability can
+    /// evolve (T12).
+    pub evolve_partner_level: i32,
     pub contact_window_ms: i32,
     pub invulnerable_ms: i32,
     pub hit_freeze_ms: i32,
@@ -46,7 +49,8 @@ pub struct RunRules {
     pub health_cell_pct: i32,
     pub gold_chip: i32,
     pub payout_per_minute: i32,
-    pub payout_per_ten_kills: i32,
+    /// Enemies defeated per gold paid at the end of a run.
+    pub kills_per_gold: i32,
     pub payout_boss: i32,
     pub payout_win: i32,
     pub hp_scale_per_minute_pct: i32,
@@ -85,7 +89,6 @@ pub struct Character {
     #[serde(default)]
     pub dash_cooldown_ms: i32,
     pub unlock_gold: i32,
-    pub unlock_achievement: String,
 }
 
 /// The numbers for one level of an ability. A behaviour reads the fields it
@@ -157,8 +160,6 @@ pub struct Ability {
     pub evolves_with: String,
     #[serde(default)]
     pub evolution: String,
-    #[serde(default)]
-    pub unlock_achievement: String,
     pub levels: Vec<Level>,
 }
 
@@ -282,6 +283,8 @@ pub struct ShopItem {
     pub stat: String,
     pub per_rank: i32,
     pub ranks: i32,
+    /// Ranks for sale from the start; achievements open the rest (T3).
+    pub open: i32,
     pub cost: i32,
     pub cost_step: i32,
 }
@@ -291,10 +294,35 @@ pub struct Achievement {
     pub id: String,
     pub stat: String,
     pub target: u64,
+    /// Met when the stat is at most the target (a fastest time) rather
+    /// than at least it. A stat of 0 means never done.
+    #[serde(default)]
+    pub at_most: bool,
+    /// Column and row on the achievement grid (T4).
+    pub at: [i32; 2],
+    /// Visible from the first launch; the rest show once a neighbour is
+    /// earned.
+    #[serde(default)]
+    pub start: bool,
+    /// Picture under `icons/ach_<icon>`.
+    pub icon: String,
     pub gold: i32,
     pub tickets: i32,
+    /// What it unlocks, as `kind:id`: `character:`, `ability:`,
+    /// `evolution:`, `rank:` (one more outfitter rank), `slot:` (a gear
+    /// slot by number) or `banish:` (a count). Empty for none.
     #[serde(default)]
-    pub banishes: i32,
+    pub unlock: String,
+}
+
+/// The kinds an achievement may unlock.
+pub const UNLOCKS: &[&str] = &["character", "ability", "evolution", "rank", "slot", "banish"];
+
+impl Achievement {
+    /// The unlock split into kind and id, if any.
+    pub fn unlocks(&self) -> Option<(&str, &str)> {
+        self.unlock.split_once(':')
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize, serde::Serialize)]
@@ -309,6 +337,8 @@ pub enum Rarity {
 pub struct Module {
     pub id: String,
     pub rarity: Rarity,
+    /// Which kind of gear slot it fits (`GearRules::slots`).
+    pub slot: String,
     pub stat: String,
     pub per_rank: i32,
 }
@@ -323,9 +353,24 @@ pub struct CacheRules {
     pub pity_rare: u32,
     pub pity_epic: u32,
     pub max_rank: i32,
-    pub slots: usize,
     pub shield_base_s: i32,
-    pub duplicate_gold: i32,
+}
+
+/// The gear window (T8, T9): typed slots, merging and scrapping.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GearRules {
+    /// The kind of each slot, in order. A module fits a slot of its kind.
+    pub slots: Vec<String>,
+    /// How many slots are open before any achievement opens more.
+    pub open_slots: usize,
+    /// Copies of the same module at the same rank that merge into one
+    /// rank higher.
+    pub merge_count: usize,
+    /// Gold for scrapping a module at rank 1, by rarity; it doubles with
+    /// each rank.
+    pub scrap_common: i32,
+    pub scrap_rare: i32,
+    pub scrap_epic: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -341,9 +386,9 @@ pub struct Content {
     pub rift: RiftRules,
     pub shop: Vec<ShopItem>,
     pub achievements: Vec<Achievement>,
-    pub achievement_xp_pct: i32,
     pub modules: Vec<Module>,
     pub cache: CacheRules,
+    pub gear: GearRules,
 }
 
 /// The stats a passive, a shop rank or a module may change. A name outside
@@ -408,6 +453,22 @@ impl Content {
         self.evolutions.iter().any(|a| a.id == id)
     }
 
+    /// The achievement that unlocks `kind:id`, if one does.
+    pub fn unlocked_by(&self, kind: &str, id: &str) -> Option<&Achievement> {
+        self.achievements.iter().find(|a| a.unlocks() == Some((kind, id)))
+    }
+
+    pub fn achievement(&self, id: &str) -> Option<&Achievement> {
+        self.achievements.iter().find(|a| a.id == id)
+    }
+
+    /// The level a partner passive must reach for its ability to evolve:
+    /// the run's rule, or the passive's own highest level if that is lower.
+    pub fn partner_level(&self, passive: &str) -> i32 {
+        let max = self.passive(passive).map(|p| self.passive_max(p)).unwrap_or(1);
+        self.run.evolve_partner_level.min(max).max(1)
+    }
+
     pub fn passive_max(&self, p: &Passive) -> i32 {
         if p.max_level > 0 {
             p.max_level
@@ -429,11 +490,6 @@ impl Content {
                 if !ability_known(x) {
                     return Err(format!("character {} lists unknown ability {x}", c.id));
                 }
-            }
-            if !c.unlock_achievement.is_empty()
-                && !self.achievements.iter().any(|a| a.id == c.unlock_achievement)
-            {
-                return Err(format!("character {} unlocks by unknown achievement", c.id));
             }
         }
         for a in self.abilities.iter().chain(self.evolutions.iter()) {
@@ -513,6 +569,60 @@ impl Content {
                 return Err(format!("enemy {} spawns unknown {}", e.id, e.spawn));
             }
         }
+        for m in &self.modules {
+            if !self.gear.slots.contains(&m.slot) {
+                return Err(format!("module {} fits no gear slot: {}", m.id, m.slot));
+            }
+        }
+        if self.gear.open_slots > self.gear.slots.len() || self.gear.merge_count < 2 {
+            return Err("the gear rules open more slots than exist or merge fewer than two".into());
+        }
+        let mut cells = std::collections::BTreeSet::new();
+        for a in &self.achievements {
+            if !cells.insert(a.at) {
+                return Err(format!("achievement {} shares its grid cell", a.id));
+            }
+            if a.target == 0 {
+                return Err(format!("achievement {} has no target", a.id));
+            }
+            let Some((kind, id)) = a.unlocks() else {
+                if a.unlock.is_empty() {
+                    continue;
+                }
+                return Err(format!("achievement {} unlocks \"{}\"", a.id, a.unlock));
+            };
+            let known = match kind {
+                "character" => self.character(id).is_some(),
+                "ability" => self.abilities.iter().any(|x| x.id == id),
+                "evolution" => self.is_evolution(id),
+                "rank" => self.shop.iter().any(|s| s.id == id),
+                "slot" => id
+                    .parse::<usize>()
+                    .map(|n| n >= self.gear.open_slots && n < self.gear.slots.len())
+                    .unwrap_or(false),
+                "banish" => id.parse::<i32>().is_ok(),
+                _ => false,
+            };
+            if !known || !UNLOCKS.contains(&kind) {
+                return Err(format!("achievement {} unlocks unknown {}", a.id, a.unlock));
+            }
+        }
+        if !self.achievements.iter().any(|a| a.start) {
+            return Err("no achievement is visible from the start".into());
+        }
+        for s in &self.shop {
+            let more = self
+                .achievements
+                .iter()
+                .filter(|a| a.unlocks() == Some(("rank", s.id.as_str())))
+                .count() as i32;
+            if s.open + more != s.ranks {
+                return Err(format!(
+                    "outfitter line {} has {} ranks but {} open and {more} from achievements",
+                    s.id, s.ranks, s.open
+                ));
+            }
+        }
         if self.cache.common + self.cache.rare + self.cache.epic == 0 {
             return Err("the salvage cache has no odds".into());
         }
@@ -534,7 +644,7 @@ mod tests {
     fn content_file_loads_and_every_reference_resolves() {
         let c = shipped();
         assert_eq!(c.characters.len(), 3);
-        assert_eq!(c.achievements.len(), 20);
+        assert!(c.achievements.len() >= 50, "T5 asks for many more achievements");
         for ch in &c.characters {
             assert!(c.ability(&ch.starter).is_some());
         }

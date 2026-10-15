@@ -275,7 +275,7 @@ pub fn frame(g: &Game) -> Vec<i32> {
             alpha,
         );
         d.sprite(
-            sprite(&format!("players/{}", ch.id)),
+            sprite(&player_picture(w, p, &ch.id)),
             at.0,
             at.1,
             size,
@@ -346,6 +346,20 @@ pub fn frame(g: &Game) -> Vec<i32> {
     d.finish()
 }
 
+/// Ticks each walk frame shows (T6): about eight frames a second.
+pub const WALK_FRAME_MS: i32 = 125;
+
+/// The picture for a player: a walk frame while moving, the standing
+/// picture otherwise.
+pub fn player_picture(w: &World, p: &crate::world::Player, id: &str) -> String {
+    if p.moving && p.alive && p.dash_left == 0 {
+        let step = crate::geom::ticks(WALK_FRAME_MS).max(1) as u32;
+        format!("players/{id}_walk{}", (w.tick / step) % 4)
+    } else {
+        format!("players/{id}")
+    }
+}
+
 fn turn_of(v: V) -> i32 {
     // the angle of v in turns, by bisection on the rotation of (1, 0)
     if v.is_zero() {
@@ -380,6 +394,9 @@ fn hp_bar(d: &mut DrawList, x: i32, y: i32, w: i32, hp: i32, max: i32, color: Co
     let fill = (w as i64 * hp.max(0) as i64 / max.max(1) as i64) as i32;
     d.rect(x, y, fill, h, color, 1000);
 }
+
+/// How long a dash prompt shows at the start of a run, until the first dash.
+pub const DASH_PROMPT_MS: i32 = 12_000;
 
 fn hud(d: &mut DrawList, g: &Game, w: &World, c: &Content) {
     let vw = g.view_w;
@@ -444,6 +461,34 @@ fn hud(d: &mut DrawList, g: &Game, w: &World, c: &Content) {
             &g.text.name(&c.enemies[f.kind].id),
         );
     }
+    // a character that can dash is told so, and sees when it is ready (T11)
+    let ch = &c.characters[me.character];
+    if ch.trait_ == "dash" && me.alive {
+        let full = crate::geom::ticks(ch.dash_cooldown_ms).max(1);
+        let ready = me.dash_cd == 0;
+        let y = 60;
+        let bw = 120;
+        d.rect(16, y - 4, bw, 8, Color::HpBack, 1000);
+        d.rect(16, y - 4, bw * (full - me.dash_cd) / full, 8, Color::Xp, 1000);
+        d.text(
+            16 + bw + 10,
+            y,
+            16,
+            if ready { Color::Text } else { Color::Rock },
+            Align::Left,
+            &g.text.get(if ready { "hud.dash_ready" } else { "hud.dash_wait" }),
+        );
+        if me.record.dashes == 0 && w.tick < crate::geom::ticks(DASH_PROMPT_MS) as u32 {
+            d.text(
+                vw / 2,
+                g.view_h / 2 + 70,
+                20,
+                Color::Text,
+                Align::Center,
+                &g.text.get("hud.dash_prompt"),
+            );
+        }
+    }
     if let Some(b) = &w.banner {
         let y = g.view_h / 4;
         d.rect(0, y - 26, vw, 52, Color::Panel, 700);
@@ -507,6 +552,80 @@ mod tests {
             found
         };
         assert!(pos(shot).unwrap() > pos(foe).unwrap());
+    }
+
+    #[test]
+    fn a_moving_player_cycles_four_walk_frames_and_a_still_one_stands() {
+        let mut g = game();
+        g.act("run.start", "").unwrap();
+        let c = g.content.clone();
+        let w = g.world.as_mut().unwrap();
+        let still = player_picture(w, &w.players[0], "pathfinder");
+        assert_eq!(still, "players/pathfinder");
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..60 {
+            w.step(
+                &c,
+                &[crate::world::Input {
+                    mx: 127,
+                    ..Default::default()
+                }],
+            );
+            seen.insert(player_picture(w, &w.players[0], "pathfinder"));
+        }
+        let want: std::collections::BTreeSet<String> =
+            (0..4).map(|k| format!("players/pathfinder_walk{k}")).collect();
+        assert_eq!(seen, want);
+        for name in &want {
+            assert!(sprite(name) >= 0, "{name} is a known picture");
+        }
+    }
+
+    fn texts(list: &[i32]) -> Vec<String> {
+        // the text op: code 5, x, y, size, colour, align, count, then codes
+        let mut out = Vec::new();
+        let mut at = 0;
+        while at < list.len() {
+            let code = list[at];
+            let n = match code {
+                0 => 1,
+                1 => 6,
+                2 => 7,
+                3 => 6,
+                4 => 4 + list[at + 4] as usize * 2,
+                5 => 6 + list[at + 6] as usize,
+                6 => 3,
+                _ => 7,
+            };
+            if code == 5 {
+                let count = list[at + 6] as usize;
+                let s: String = list[at + 7..at + 7 + count]
+                    .iter()
+                    .filter_map(|&u| char::from_u32(u as u32))
+                    .collect();
+                out.push(s);
+            }
+            at += 1 + n;
+        }
+        out
+    }
+
+    #[test]
+    fn vector_is_reminded_to_dash_and_pathfinder_is_not() {
+        let mut g = game();
+        g.save.unlocked.push("vector".into());
+        g.act("hangar.pick", "vector").unwrap();
+        g.act("run.start", "").unwrap();
+        g.advance(0, crate::game::Raw::default());
+        let shown = texts(&frame(&g));
+        assert!(shown.contains(&g.text.get("hud.dash_prompt")), "{shown:?}");
+        assert!(shown.contains(&g.text.get("hud.dash_ready")));
+        g.act("run.quit", "").unwrap();
+        g.act("hangar.pick", "pathfinder").unwrap();
+        g.act("run.start", "").unwrap();
+        let shown = texts(&frame(&g));
+        assert!(!shown.contains(&g.text.get("hud.dash_prompt")));
+        assert!(!shown.contains(&g.text.get("hud.dash_ready")));
     }
 
     #[test]

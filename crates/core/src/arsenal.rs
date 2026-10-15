@@ -665,7 +665,9 @@ impl World {
             };
             !def.evolution.is_empty()
                 && slot.level >= content.run.max_level
-                && p.passives.iter().any(|q| q.id == def.evolves_with)
+                && p.passives
+                    .iter()
+                    .any(|q| q.id == def.evolves_with && q.level >= content.partner_level(&def.evolves_with))
                 && !p.load.locked.contains(&def.evolution)
         })
     }
@@ -684,6 +686,9 @@ impl World {
             cd: ticks(300),
         };
         p.record.evolved.push(into);
+        if p.record.first_evolve == 0 {
+            p.record.first_evolve = (self.tick as i32).max(1);
+        }
         self.banner = Some(crate::world::Banner {
             key: "banner.evolved".into(),
             left: ticks(2500),

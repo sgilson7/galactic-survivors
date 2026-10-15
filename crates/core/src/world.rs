@@ -158,6 +158,15 @@ pub struct Offer {
 pub struct Record {
     pub kills: u32,
     pub kills_by: BTreeMap<String, u32>,
+    /// Kills by enemy kind.
+    pub kills_of: BTreeMap<String, u32>,
+    /// The tick of the first hit taken; 0 while untouched.
+    pub first_hit: i32,
+    /// The tick of the first evolution; 0 for none.
+    pub first_evolve: i32,
+    pub dashes: u32,
+    /// Times this player stood by a partner until they got back up.
+    pub revives: u32,
     pub evolved: Vec<String>,
     pub gold: i32,
     pub tickets: i32,
@@ -613,6 +622,7 @@ impl World {
                 p.dash_cd = ticks(dash_cooldown);
                 p.dash_dir = p.facing;
                 p.invulnerable = p.invulnerable.max(p.dash_left);
+                p.record.dashes += 1;
             }
             let step = if p.dash_left > 0 {
                 p.dash_left -= 1;
@@ -1149,6 +1159,9 @@ impl World {
         }
         let dmg = (damage - armor).max(1);
         p.hp -= dmg;
+        if p.record.first_hit == 0 {
+            p.record.first_hit = (self.tick as i32).max(1);
+        }
         p.invulnerable = invulnerable;
         p.hurt_flash = ticks(200);
         if p.hp <= 0 {
@@ -1208,6 +1221,7 @@ impl World {
         if !ability.is_empty() {
             *rec.kills_by.entry(ability.to_string()).or_insert(0) += 1;
         }
+        *rec.kills_of.entry(e.id.clone()).or_insert(0) += 1;
         if e.xp > 0 {
             self.drop(content, PickupKind::Xp, f.pos, e.xp);
         }
@@ -1377,6 +1391,12 @@ impl World {
                 p.revive_progress = (p.revive_progress - 2).max(0);
             }
             if p.revive_progress >= ticks(content.run.revive_ms) {
+                for q in self.players.iter_mut() {
+                    if q.alive && within(q.pos, ghost, px(content.run.revive_radius)) {
+                        q.record.revives += 1;
+                    }
+                }
+                let p = &mut self.players[seat];
                 p.alive = true;
                 p.revive_progress = 0;
                 p.invulnerable = ticks(2000);
